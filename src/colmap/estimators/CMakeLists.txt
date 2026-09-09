@@ -47,6 +47,7 @@ set(ESTIMATORS_SRCS
     gravity_refinement.h gravity_refinement.cc
     pose.h pose.cc
     rig_calibration.h rig_calibration.cc
+    rig_calibration_initialization.h rig_calibration_initialization.cc
     rig_calibration_observability.h rig_calibration_observability.cc
     rotation_averaging.h rotation_averaging.cc
     rotation_averaging_impl.h rotation_averaging_impl.cc
@@ -167,6 +168,11 @@ COLMAP_ADD_TEST(
 COLMAP_ADD_TEST(
     NAME rig_calibration_observability_test
     SRCS rig_calibration_observability_test.cc
+    LINK_LIBS colmap_estimators
+)
+COLMAP_ADD_TEST(
+    NAME rig_calibration_initialization_test
+    SRCS rig_calibration_initialization_test.cc
     LINK_LIBS colmap_estimators
 )
 COLMAP_ADD_TEST(

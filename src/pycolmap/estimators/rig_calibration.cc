@@ -1,5 +1,6 @@
 #include "colmap/estimators/rig_calibration.h"
 
+#include "pycolmap/estimators/rig_calibration_initialization.h"
 #include "pycolmap/estimators/rig_calibration_packed.h"
 #include "pycolmap/estimators/rig_calibration_preparation.h"
 #include "pycolmap/helpers.h"
@@ -108,4 +109,5 @@ void BindRigCalibration(py::module& m) {
 
   BindRigCalibrationPacked(m);
   BindRigCalibrationPreparation(m);
+  BindRigCalibrationInitialization(m);
 }

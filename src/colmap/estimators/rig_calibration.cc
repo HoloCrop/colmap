@@ -115,12 +115,6 @@ std::vector<int> ConstantCameraParams(const RigCalibrationOptions& options,
   }
   if (!refine_distortion) {
     append(camera.ExtraParamsIdxs());
-  } else if (camera.model_id == FullOpenCVCameraModel::model_id) {
-    constant_params.insert(
-        constant_params.end(),
-        {static_cast<int>(FullOpenCVCameraModel::extra_params_idxs[5]),
-         static_cast<int>(FullOpenCVCameraModel::extra_params_idxs[6]),
-         static_cast<int>(FullOpenCVCameraModel::extra_params_idxs[7])});
   }
   std::sort(constant_params.begin(), constant_params.end());
   constant_params.erase(

@@ -71,8 +71,7 @@ struct RigCalibrationGroup {
 struct RigCalibrationOptions {
   bool refine_focal_length = true;
   bool refine_principal_point = false;
-  // For FULL_OPENCV, refines k1, k2, p1, p2, and k3 while keeping the weakly
-  // observable rational denominator k4, k5, and k6 fixed.
+  // Refine all distortion parameters of the camera model.
   bool refine_distortion = true;
   bool refine_sensor_from_rig = true;
 

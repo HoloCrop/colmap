@@ -1,6 +1,32 @@
 COLMAP
 ======
 
+CropVision fork maintenance
+--------------------------
+
+**Keep CropVision algorithms separate from upstream COLMAP implementations.**
+This downstream fork must remain maintainable as we merge updates from
+[`colmap/colmap`](https://github.com/colmap/colmap). A small, reviewable set of
+changes to upstream code is a design requirement.
+
+* Put custom algorithms, interfaces, bindings, and tests in dedicated files or
+  modules. Reuse COLMAP types and Ceres infrastructure through narrow interfaces.
+* Keep changes to upstream files limited to integration hooks such as build and
+  binding registration. If a core change is necessary, explain why an extension
+  cannot own it, isolate the change, and test the affected behavior. Avoid
+  unrelated refactoring or formatting of upstream code.
+* Keep upstream synchronization commits separate from custom algorithm changes.
+  Contain adaptations to changing upstream APIs at the extension boundary.
+
+The [rig initializer](src/colmap/estimators/rig_calibration_initialization.h) and
+its [Python binding](src/pycolmap/estimators/rig_calibration_initialization.cc)
+follow this structure: their implementations and tests are separate, with small
+build and binding registration hooks.
+
+Calibration establishes camera intrinsics and camera-to-rig transforms.
+Downstream alignment, including CASPAR's fixed-rig solver, consumes that fixed
+calibration. Keep those responsibilities separate.
+
 About
 -----
 

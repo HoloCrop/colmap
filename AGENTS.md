@@ -1,5 +1,13 @@
 # AGENTS.md — COLMAP Guide
 
+## CropVision fork: preserve upstream mergeability
+
+Read the [fork maintenance policy](README.md#cropvision-fork-maintenance) before
+changing native code. Keep custom algorithms, bindings, and tests in dedicated
+files or modules, with small integration hooks in upstream code. Document any
+unavoidable core change and why an extension cannot own it. Keep upstream merges
+separate from custom algorithm changes; avoid unrelated edits to upstream files.
+
 ## Project Overview
 
 COLMAP is a general-purpose Structure-from-Motion (SfM) and Multi-View Stereo (MVS) pipeline that reconstructs 3D models from 2D image collections. Written in C++17 with optional CUDA support. Single binary (colmap) with many subcommands, a Qt GUI, and Python bindings (pycolmap).

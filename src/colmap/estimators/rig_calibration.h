@@ -77,6 +77,11 @@ struct RigCalibrationOptions {
 
   CeresBundleAdjustmentOptions ceres;
 
+  double initialization_angular_stddev_deg = 1.0;
+  CeresBundleAdjustmentOptions::LossFunctionType initialization_loss_function_type =
+      CeresBundleAdjustmentOptions::LossFunctionType::SOFT_L1;
+  double initialization_loss_function_scale = 1.0;
+
   CeresBundleAdjustmentOptions::LossFunctionType distance_loss_function_type =
       CeresBundleAdjustmentOptions::LossFunctionType::HUBER;
   double distance_loss_function_scale = 1.96;

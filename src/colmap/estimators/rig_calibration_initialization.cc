@@ -2,6 +2,7 @@
 
 #include "colmap/estimators/cost_functions/manifold.h"
 #include "colmap/estimators/rig_calibration_observability.h"
+#include "colmap/math/math.h"
 #include "colmap/scene/reconstruction.h"
 #include "colmap/util/hash_containers.h"
 #include "colmap/util/logging.h"
@@ -19,7 +20,6 @@
 namespace colmap {
 namespace {
 
-constexpr double kAngularStddev = EIGEN_PI / 180.0;
 constexpr double kRankTolerance = 1e-10;
 
 // Store centers separately so changing a rotation cannot move its camera.
@@ -53,6 +53,7 @@ struct PairParameterBlocks {
 struct RelativeRotationCost {
   std::array<int, 4> slots;
   Eigen::Quaterniond camera2_from_camera1;
+  double angular_stddev;
 
   template <typename T>
   bool operator()(T const* const* parameters, T* residuals) const {
@@ -68,7 +69,7 @@ struct RelativeRotationCost {
     const T quaternion[] = {error.w(), error.x(), error.y(), error.z()};
     ceres::QuaternionToAngleAxis(quaternion, residuals);
     Eigen::Map<Eigen::Matrix<T, 3, 1>> result(residuals);
-    result /= T(kAngularStddev);
+    result /= T(angular_stddev);
     return true;
   }
 };
@@ -78,6 +79,7 @@ struct RelativeDirectionCost {
   Eigen::Matrix3d group_from_rig1;
   Eigen::Matrix3d group_from_rig2;
   Eigen::Vector3d direction_in_group;
+  double angular_stddev;
 
   template <typename T>
   bool operator()(T const* const* parameters, T* residuals) const {
@@ -90,7 +92,7 @@ struct RelativeDirectionCost {
         Eigen::Map<const Eigen::Matrix<T, 3, 1>>(parameters[slots[3]]);
     Eigen::Map<Eigen::Matrix<T, 3, 1>> result(residuals);
     result = (displacement.normalized() - direction_in_group.cast<T>()) /
-             T(kAngularStddev);
+             T(angular_stddev);
     return true;
   }
 };
@@ -161,7 +163,7 @@ class RigCalibrationInitializer {
   void InitializeRotations(
       const std::vector<RigCalibrationInitializationGroup>& groups,
       RigCalibrationInitializationSummary& summary) {
-    ceres::SoftLOneLoss loss(1.0);
+    const auto loss = CreateAngularLoss();
     ceres::Problem::Options problem_options;
     problem_options.loss_function_ownership = ceres::DO_NOT_TAKE_OWNERSHIP;
     ceres::Problem problem(problem_options);
@@ -204,10 +206,11 @@ class RigCalibrationInitializer {
         data.non_track_residual_blocks.push_back(AddPairResidual(
             problem,
             RelativeRotationCost{parameters.slots,
-                                 pair.cam2_from_cam1.rotation()},
+                                 pair.cam2_from_cam1.rotation(),
+                                 DegToRad(options_.initialization_angular_stddev_deg)},
             parameters,
             4,
-            &loss));
+            loss.get()));
       }
     }
     Solve(problem, summary.rotation_summary);
@@ -222,7 +225,7 @@ class RigCalibrationInitializer {
   void InitializePositions(
       const std::vector<RigCalibrationInitializationGroup>& groups,
       RigCalibrationInitializationSummary& summary) {
-    ceres::SoftLOneLoss loss(1.0);
+    const auto loss = CreateAngularLoss();
     CeresBundleAdjustmentOptions distance_options = options_.ceres;
     distance_options.loss_function_type = options_.distance_loss_function_type;
     distance_options.loss_function_scale =
@@ -273,10 +276,11 @@ class RigCalibrationInitializer {
                                 parameters.slots,
                                 frame1.rotation.conjugate().toRotationMatrix(),
                                 frame2.rotation.conjugate().toRotationMatrix(),
-                                direction},
+                                direction,
+                                DegToRad(options_.initialization_angular_stddev_deg)},
                             parameters,
                             3,
-                            &loss));
+                            loss.get()));
       }
       const auto& prior = groups[group_index].first_to_last_distance;
       data.non_track_residual_blocks.push_back(problem.AddResidualBlock(
@@ -334,6 +338,13 @@ class RigCalibrationInitializer {
     THROW_CHECK_EQ(rank, information.rows())
         << "Two-view poses do not constrain " << description;
     return rank;
+  }
+
+  std::unique_ptr<ceres::LossFunction> CreateAngularLoss() const {
+    CeresBundleAdjustmentOptions loss_options = options_.ceres;
+    loss_options.loss_function_type = options_.initialization_loss_function_type;
+    loss_options.loss_function_scale = options_.initialization_loss_function_scale;
+    return loss_options.CreateLossFunction();
   }
 
   void Solve(ceres::Problem& problem, ceres::Solver::Summary& summary) const {

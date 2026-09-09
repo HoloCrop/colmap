@@ -134,6 +134,8 @@ RigCalibrationOptions::RigCalibrationOptions() {
 }
 
 bool RigCalibrationOptions::Check() const {
+  CHECK_OPTION_GT(initialization_angular_stddev_deg, 0);
+  CHECK_OPTION_GT(initialization_loss_function_scale, 0);
   CHECK_OPTION_GT(distance_loss_function_scale, 0);
   CHECK_OPTION_GT(max_reprojection_error_pixels, 0);
   CHECK_OPTION_GE(min_triangulation_angle_deg, 0);
@@ -349,9 +351,7 @@ struct CeresRigCalibrator::Impl {
     Timer timer;
     timer.Start();
     const bool refine_global_calibration = stage != CalibrationStage::LOCAL;
-    ceres::LossFunction* reprojection_loss_function =
-        stage == CalibrationStage::FINAL_JOINT ? nullptr
-                                               : reprojection_loss.get();
+    ceres::LossFunction* reprojection_loss_function = reprojection_loss.get();
     ceres::Problem::Options problem_options;
     problem_options.loss_function_ownership = ceres::DO_NOT_TAKE_OWNERSHIP;
     problem = std::make_shared<ceres::Problem>(problem_options);

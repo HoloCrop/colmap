@@ -28,6 +28,12 @@ void BindRigCalibration(py::module& m) {
           .def_readwrite("refine_sensor_from_rig",
                          &Options::refine_sensor_from_rig)
           .def_readwrite("ceres", &Options::ceres)
+          .def_readwrite("initialization_angular_stddev_deg",
+                         &Options::initialization_angular_stddev_deg)
+          .def_readwrite("initialization_loss_function_type",
+                         &Options::initialization_loss_function_type)
+          .def_readwrite("initialization_loss_function_scale",
+                         &Options::initialization_loss_function_scale)
           .def_readwrite("distance_loss_function_type",
                          &Options::distance_loss_function_type)
           .def_readwrite("distance_loss_function_scale",

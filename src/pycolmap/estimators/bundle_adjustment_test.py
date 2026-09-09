@@ -317,7 +317,8 @@ def test_caspar_refines_points_against_exact_fixed_cameras():
 
 
 @caspar_only
-def test_fixed_rig_array_ba_solves_live_sensor_translation_scale():
+@pytest.mark.parametrize("refine_scale", [True, False])
+def test_fixed_rig_array_ba_solves_live_sensor_translation_scale(refine_scale):
     rng = np.random.default_rng(7)
     expected_scale = 1.008
     baseline = 0.4
@@ -409,6 +410,8 @@ def test_fixed_rig_array_ba_solves_live_sensor_translation_scale():
     )
     assert np.shares_memory(row_source.points, source_points)
     assert row_source.points.strides == source_points.strides
+    if not refine_scale:
+        sensors_from_rig[1].translation *= expected_scale
     result = pycolmap.caspar_optimize_row(
         (row_source,),
         np.arange(len(expected_points) + 1, dtype=np.uint32),
@@ -424,6 +427,7 @@ def test_fixed_rig_array_ba_solves_live_sensor_translation_scale():
         rig_centers.astype(np.float32),
         prior_sqrt_information,
         options,
+        refine_scale=refine_scale,
     )
 
     def reprojection_rmse(sensor_scale):
@@ -451,11 +455,16 @@ def test_fixed_rig_array_ba_solves_live_sensor_translation_scale():
 
     assert result.summary.is_solution_usable()
     assert result.observation_count == len(observation_xy)
-    assert result.sensor_from_rig_scale == pytest.approx(
-        expected_scale, abs=5e-4
-    )
+    if refine_scale:
+        assert result.sensor_from_rig_scale == pytest.approx(
+            expected_scale, abs=5e-4
+        )
+    else:
+        assert result.sensor_from_rig_scale == 1.0
+    assert result.summary.final_score < result.summary.initial_score
     assert reprojection_rmse(result.sensor_from_rig_scale) < 1e-2
-    assert reprojection_rmse(1.0) > 0.1
+    if refine_scale:
+        assert reprojection_rmse(1.0) > 0.1
 
 
 @caspar_only

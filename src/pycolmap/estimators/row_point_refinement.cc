@@ -521,7 +521,8 @@ PyCasparRowBundleResult OptimizeRow(
     const Uint32Array& prior_frame_indices,
     const FloatArray& prior_positions,
     const FloatArray& prior_sqrt_information,
-    const CasparBundleAdjustmentOptions& options) {
+    const CasparBundleAdjustmentOptions& options,
+    bool refine_scale) {
   THROW_CHECK_GT(sources.size(), 0);
   const std::vector<CasparRowTrackSource> native_sources =
       NativeRowTrackSources(sources);
@@ -568,7 +569,8 @@ PyCasparRowBundleResult OptimizeRow(
                                prior_positions.data(),
                                prior_sqrt_information.data(),
                                num_priors,
-                               options);
+                               options,
+                               refine_scale);
   }
   const size_t num_points = result.row_point_indices.size();
   return {
@@ -877,6 +879,7 @@ void BindRowPointRefinement(py::module& m) {
         "prior_positions"_a.noconvert(),
         "prior_sqrt_information"_a.noconvert(),
         "options"_a = CasparBundleAdjustmentOptions(),
+        "refine_scale"_a = true,
         "Jointly optimize a complete row directly from canonical source "
         "tracks and point-track CSR. Rig poses, selected points, and one "
         "shared sensor-translation scale are variable; sensor rotations and "

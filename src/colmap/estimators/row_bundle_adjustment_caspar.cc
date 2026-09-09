@@ -150,7 +150,8 @@ CasparRowBundleResult OptimizeRowCaspar(
     const float* prior_positions,
     const float* prior_sqrt_information,
     const size_t num_priors,
-    const CasparBundleAdjustmentOptions& options) {
+    const CasparBundleAdjustmentOptions& options,
+    bool refine_scale) {
 #ifdef CASPAR_USE_DOUBLE
   LOG(FATAL_THROW) << "Caspar row bundle adjustment requires float precision";
   return {};
@@ -254,7 +255,8 @@ CasparRowBundleResult OptimizeRowCaspar(
       observations.pose_indices.begin(), observations.pose_indices.end());
   solver.SetRowFixedRigSchurTopology(observations.pose_indices,
                                      observations.point_indices,
-                                     rotation_anchor_pose_index);
+                                     rotation_anchor_pose_index,
+                                     refine_scale);
   solver.finish_indices();
 
   const caspar::SolveResult solve_result = solver.solve_rig_schur(

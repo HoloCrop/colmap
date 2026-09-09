@@ -39,6 +39,7 @@ CasparRowBundleResult OptimizeRowCaspar(
     const float* prior_positions,
     const float* prior_sqrt_information,
     size_t num_priors,
-    const CasparBundleAdjustmentOptions& options);
+    const CasparBundleAdjustmentOptions& options,
+    bool refine_scale);
 
 }  // namespace colmap

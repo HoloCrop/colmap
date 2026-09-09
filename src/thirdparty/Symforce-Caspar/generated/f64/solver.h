@@ -240,7 +240,7 @@ class GraphSolver {
   void SetRowFixedRigSchurTopology(
       const std::vector<unsigned int>& pose_indices,
       const std::vector<unsigned int>& point_indices,
-      unsigned int rotation_anchor_pose_index);
+      unsigned int rotation_anchor_pose_index, bool refine_scale = true);
 
   SolveResult solve_rig_schur(bool print_progress = false,
                               bool verbose_logging = false);

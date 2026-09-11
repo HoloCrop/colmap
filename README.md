@@ -17,6 +17,30 @@ contains every cached image. Subsets still use independent filtered caches;
 reconstructions own their mutable cameras, frames and images. Preserve these
 conditions when merging upstream changes.
 
+Immutable database caches use `scene/bulk_correspondence_graph.{h,cc}` to
+validate and deduplicate each pair, allocate flat adjacency once, and copy
+filtered components directly. The integration points are `DatabaseCache::Load`
+and `CreateFromCache`. A single friend declaration in `CorrespondenceGraph`
+allows the builder to populate its existing private storage without exposing
+that layout as a public API. Keep the mutable graph API for other callers.
+
+Alignment track export uses `sensor/source_coordinate_restoration.{h,cc}` and
+its dedicated PyCOLMAP binding. It restores resized/undistorted pixels in one
+batch without computing projection Jacobians. Calibration does not export
+tracks and does not use this path. The distortion equations reuse COLMAP's
+FULL_OPENCV model, extended with thin-prism and tilted-sensor terms matching
+[OpenCV's model](https://github.com/opencv/opencv/blob/4.x/modules/calib3d/src/distortion_model.hpp).
+
+Keep these algorithms, bindings and tests in dedicated files; preserve the small
+integration hooks when merging upstream. Build native targets with **16 jobs**.
+
+The fixed-calibration CASPAR rig-Schur adapter reserves its three factor variants
+from observation counts corrected after gauge selection. This specialization is
+selected by the existing backend, without another configuration flag. Generic
+CASPAR variants retain their existing packing path. Positioning
+scratch buffers are reused within one call; solver membership and topology are
+rebuilt after filtering in each bundle-adjustment round.
+
 About
 -----
 

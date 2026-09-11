@@ -157,6 +157,8 @@ class CorrespondenceGraph {
   bool IsTwoViewObservation(image_t image_id, point2D_t point2D_idx) const;
 
  private:
+  friend class BulkCorrespondenceGraph;
+
   struct Image {
     // Number of 2D points with at least one correspondence to another image.
     point2D_t num_observations = 0;

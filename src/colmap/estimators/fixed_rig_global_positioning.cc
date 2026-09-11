@@ -530,6 +530,8 @@ bool FixedRigGlobalPositioner::BuildFrameConstraints(
   const double minimum_cosine = std::cos(DegToRad(min_tri_angle_deg_));
   constraints.clear();
   constraints.reserve(reconstruction.NumPoints3D());
+  std::vector<RigObservation> observations;
+  std::vector<RigPoint> rig_points;
 
   for (const auto& [point3D_id, point3D] : reconstruction.Points3D()) {
     if (point3D.track.Length() <
@@ -537,7 +539,7 @@ bool FixedRigGlobalPositioner::BuildFrameConstraints(
       continue;
     }
 
-    std::vector<RigObservation> observations;
+    observations.clear();
     observations.reserve(point3D.track.Length());
     for (const TrackElement& element : point3D.track.Elements()) {
       const Image& image = reconstruction.Image(element.image_id);
@@ -572,7 +574,7 @@ bool FixedRigGlobalPositioner::BuildFrameConstraints(
                                 observation2.point2D_idx);
               });
 
-    std::vector<RigPoint> rig_points;
+    rig_points.clear();
     for (size_t group_begin = 0; group_begin < observations.size();) {
       size_t group_end = group_begin + 1;
       while (group_end < observations.size() &&

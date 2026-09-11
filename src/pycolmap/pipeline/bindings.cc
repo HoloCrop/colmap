@@ -13,9 +13,11 @@ void BindMeshing(py::module& m);
 void BindMVS(py::module& m);
 #endif
 void BindSfM(py::module& m);
+void BindSourceCoordinateRestoration(py::module& m);
 
 void BindPipeline(py::module& m) {
   BindImages(m);
+  BindSourceCoordinateRestoration(m);
   BindExtractFeatures(m);
   BindMatchFeatures(m);
   BindSfM(m);

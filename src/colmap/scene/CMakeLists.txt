@@ -50,6 +50,7 @@ COLMAP_ADD_LIBRARY(
     NAME colmap_scene
     SRCS
         correspondence_graph.h correspondence_graph.cc
+        bulk_correspondence_graph.h bulk_correspondence_graph.cc
         database.h database.cc
         database_sqlite.h database_sqlite.cc
         database_cache.h database_cache.cc
@@ -202,5 +203,11 @@ COLMAP_ADD_TEST(
 COLMAP_ADD_TEST(
     NAME pose_graph_test
     SRCS pose_graph_test.cc
+    LINK_LIBS colmap_scene
+)
+
+COLMAP_ADD_TEST(
+    NAME bulk_correspondence_graph_test
+    SRCS bulk_correspondence_graph_test.cc
     LINK_LIBS colmap_scene
 )

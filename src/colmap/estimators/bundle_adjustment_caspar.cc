@@ -112,6 +112,7 @@ class CasparBundleAdjuster : public BundleAdjuster {
                      << camera.ModelName();
         continue;
       }
+      size_t num_observations = 0;
       for (const Point2D& point2D : image.Points2D()) {
         if (!point2D.HasPoint3D() ||
             config_.IsIgnoredPoint(point2D.point3D_id) ||
@@ -119,6 +120,10 @@ class CasparBundleAdjuster : public BundleAdjuster {
           continue;
         }
         point3D_num_observations_[point2D.point3D_id]++;
+        ++num_observations;
+      }
+      if (solver_mode_ == CasparSolverMode::RIG_SCHUR) {
+        rig_schur_image_counts_[image_id].variable_points = num_observations;
       }
     }
     for (const auto point3D_id : config_.VariablePoints()) {
@@ -149,6 +154,9 @@ class CasparBundleAdjuster : public BundleAdjuster {
     CreateCalibrationNodes();
     CreatePoseNodes();
     CreatePointNodes();
+    if (solver_mode_ == CasparSolverMode::RIG_SCHUR) {
+      ReserveRigSchurFactors();
+    }
     AddFactors();
     AddExternalFactors();
   }
@@ -197,7 +205,67 @@ class CasparBundleAdjuster : public BundleAdjuster {
     point3D_data_.reserve(sorted_point3D_ids.size() * 3);
     for (const point3D_t point_id : sorted_point3D_ids) {
       GetOrCreatePoint(point_id, reconstruction_.Point3D(point_id));
+      // The gauge is now fixed. Correct the image counts by walking only
+      // constant-point tracks, rather than rescanning every image observation.
+      if (solver_mode_ == CasparSolverMode::RIG_SCHUR &&
+          !IsPointVariable(point_id)) {
+        for (const auto& element :
+             reconstruction_.Point3D(point_id).track.Elements()) {
+          if (config_.HasImage(element.image_id)) {
+            auto& counts = rig_schur_image_counts_.at(element.image_id);
+            --counts.variable_points;
+            ++counts.fixed_points;
+          }
+        }
+      }
     }
+  }
+
+  void ReserveRigSchurFactors() {
+    size_t main_count = 0;
+    size_t fixed_pose_count = 0;
+    size_t fixed_point_count = 0;
+    for (const auto& [image_id, counts] : rig_schur_image_counts_) {
+      if (IsPoseVariable(reconstruction_.Image(image_id).FrameId())) {
+        main_count += counts.variable_points;
+        fixed_point_count += counts.fixed_points;
+      } else {
+        fixed_pose_count += counts.variable_points;
+      }
+    }
+    // External observations have fixed poses and intrinsics. Fully constant
+    // factors are omitted by AddFactorCore, including fixed points here.
+    for (const point3D_t point_id : config_.VariablePoints()) {
+      if (!HasSufficientTrackLength(point_id) || !IsPointVariable(point_id)) {
+        continue;
+      }
+      for (const auto& element :
+           reconstruction_.Point3D(point_id).track.Elements()) {
+        fixed_pose_count += !config_.HasImage(element.image_id);
+      }
+    }
+    if (main_count == 0 && fixed_pose_count == 0 && fixed_point_count == 0) {
+      return;
+    }
+    auto& variants = model_data_per_model_.at(CameraModelId::kPinhole).variants;
+    const auto reserve = [&](FactorVariant variant, size_t count,
+                             bool pose_variable, bool point_variable) {
+      auto& data = variants[static_cast<size_t>(variant)];
+      data.pixels.reserve(2 * count);
+      data.sensor_from_rig_data.reserve(7 * count);
+      data.const_focal_and_extra.reserve(2 * count);
+      data.const_principal_point.reserve(2 * count);
+      if (pose_variable) data.pose_indices.reserve(count);
+      else data.const_poses.reserve(7 * count);
+      if (point_variable) data.point_indices.reserve(count);
+      else data.const_points.reserve(3 * count);
+    };
+    reserve(FactorVariant::FIXED_FOCAL_AND_EXTRA_FIXED_PRINCIPAL_POINT,
+            main_count, true, true);
+    reserve(FactorVariant::FIXED_POSE_FIXED_FOCAL_AND_EXTRA_FIXED_PRINCIPAL_POINT,
+            fixed_pose_count, false, true);
+    reserve(FactorVariant::FIXED_FOCAL_AND_EXTRA_FIXED_PRINCIPAL_POINT_FIXED_POINT,
+            fixed_point_count, true, false);
   }
 
   void AddFactors() {
@@ -1088,6 +1156,12 @@ class CasparBundleAdjuster : public BundleAdjuster {
   FlatHashSet<frame_t> gauge_fixed_frames_;
   FlatHashSet<point3D_t> gauge_fixed_points_;
   FlatHashMap<point3D_t, size_t> point3D_num_observations_;
+
+  struct RigSchurImageCounts {
+    size_t variable_points = 0;
+    size_t fixed_points = 0;
+  };
+  FlatHashMap<image_t, RigSchurImageCounts> rig_schur_image_counts_;
 };
 
 BundleAdjustmentOptions CreateFixedRigCasparOptions(

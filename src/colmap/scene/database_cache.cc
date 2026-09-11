@@ -30,6 +30,7 @@
 #include "colmap/scene/database_cache.h"
 
 #include "colmap/geometry/gps.h"
+#include "colmap/scene/bulk_correspondence_graph.h"
 #include "colmap/util/hash_containers.h"
 #include "colmap/util/string.h"
 #include "colmap/util/timer.h"
@@ -274,32 +275,27 @@ void DatabaseCache::Load(const Database& database, const Options& options) {
   timer.Restart();
   LOG(INFO) << "Building correspondence graph...";
 
-  correspondence_graph_ = std::make_shared<class CorrespondenceGraph>();
-
-  for (const auto& [image_id, image] : images_) {
-    correspondence_graph_->AddImage(image_id, image.NumPoints2D());
-  }
-
-  size_t num_ignored_image_pairs = 0;
-  for (auto& [pair_id, two_view_geometry] : two_view_geometries) {
-    if (UseInlierMatchesCheck(options,
-                              two_view_geometry.config,
-                              two_view_geometry.inlier_matches.size())) {
-      const auto [image_id1, image_id2] = PairIdToImagePair(pair_id);
-      const frame_t frame_id1 = image_to_frame_id.at(image_id1);
-      const frame_t frame_id2 = image_to_frame_id.at(image_id2);
-      if (frame_ids.count(frame_id1) > 0 && frame_ids.count(frame_id2) > 0) {
-        correspondence_graph_->AddTwoViewGeometry(
-            image_id1, image_id2, std::move(two_view_geometry));
-      } else {
-        num_ignored_image_pairs += 1;
-      }
-    } else {
-      num_ignored_image_pairs += 1;
-    }
-  }
-
-  correspondence_graph_->Finalize();
+  const size_t original_num_pairs = two_view_geometries.size();
+  two_view_geometries.erase(
+      std::remove_if(
+          two_view_geometries.begin(),
+          two_view_geometries.end(),
+          [&](const auto& pair) {
+            const auto& [pair_id, geometry] = pair;
+            if (!UseInlierMatchesCheck(options,
+                                      geometry.config,
+                                      geometry.inlier_matches.size())) {
+              return true;
+            }
+            const auto [first, second] = PairIdToImagePair(pair_id);
+            return frame_ids.count(image_to_frame_id.at(first)) == 0 ||
+                   frame_ids.count(image_to_frame_id.at(second)) == 0;
+          }),
+      two_view_geometries.end());
+  const size_t num_ignored_image_pairs =
+      original_num_pairs - two_view_geometries.size();
+  correspondence_graph_ =
+      BulkCorrespondenceGraph::FromPairs(images_, two_view_geometries);
 
   LOG(INFO) << StringPrintf(" in %.3fs (ignored %d)",
                             timer.ElapsedSeconds(),
@@ -400,27 +396,8 @@ std::shared_ptr<DatabaseCache> DatabaseCache::CreateFromCache(
     cache->ConvertPosePriorsToENU();
   }
 
-  // Build filtered correspondence graph with all images from connected frames.
-  cache->correspondence_graph_ = std::make_shared<class CorrespondenceGraph>();
-
-  for (const auto& [image_id, image] : cache->images_) {
-    cache->correspondence_graph_->AddImage(image_id, image.NumPoints2D());
-  }
-
-  // Copy correspondences between all image pairs in the cache.
-  for (const image_pair_t pair_id : source_graph->ImagePairs()) {
-    const auto [image_id1, image_id2] = PairIdToImagePair(pair_id);
-    if (cache->images_.count(image_id1) > 0 &&
-        cache->images_.count(image_id2) > 0) {
-      cache->correspondence_graph_->AddTwoViewGeometry(
-          image_id1,
-          image_id2,
-          source_graph->ExtractTwoViewGeometry(
-              image_id1, image_id2, /*extract_inlier_matches=*/true));
-    }
-  }
-
-  cache->correspondence_graph_->Finalize();
+  cache->correspondence_graph_ =
+      BulkCorrespondenceGraph::Subset(*source_graph, cache->images_);
 
   return cache;
 }

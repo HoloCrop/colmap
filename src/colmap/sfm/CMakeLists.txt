@@ -34,7 +34,7 @@ COLMAP_ADD_LIBRARY(
     NAME colmap_sfm
     SRCS
         fixed_rig_global_mapper.h fixed_rig_global_mapper.cc
-        global_mapper.h global_mapper.cc
+        global_mapper.h global_mapper.cc valid_correspondences.h
         incremental_mapper_impl.h incremental_mapper_impl.cc
         incremental_mapper.h incremental_mapper.cc
         incremental_triangulator.h incremental_triangulator.cc
@@ -70,5 +70,10 @@ COLMAP_ADD_TEST(
 COLMAP_ADD_TEST(
     NAME incremental_mapper_test
     SRCS incremental_mapper_test.cc
+    LINK_LIBS colmap_sfm
+)
+COLMAP_ADD_TEST(
+    NAME valid_correspondences_test
+    SRCS valid_correspondences_test.cc
     LINK_LIBS colmap_sfm
 )

@@ -5,6 +5,7 @@
 #include "colmap/scene/projection.h"
 #include "colmap/sfm/incremental_mapper.h"
 #include "colmap/sfm/observation_manager.h"
+#include "colmap/sfm/valid_correspondences.h"
 #include "colmap/util/hash_containers.h"
 #include "colmap/util/logging.h"
 #include "colmap/util/misc.h"
@@ -215,17 +216,16 @@ void GlobalMapper::EstablishTracks(const GlobalMapperOptions& options) {
             invalid_observation_id);
       }
 
-      FeatureMatches matches;
-      for (const auto& pair : pose_graph_->ValidEdges()) {
-        const auto [image_id1, image_id2] = PairIdToImagePair(pair.first);
-        auto& observation_ids1 = observation_ids[image_indices.at(image_id1)];
-        auto& observation_ids2 = observation_ids[image_indices.at(image_id2)];
-        corr_graph->ExtractMatchesBetweenImages(image_id1, image_id2, matches);
-        for (const auto& match : matches) {
-          observation_ids1[match.point2D_idx1] = 0;
-          observation_ids2[match.point2D_idx2] = 0;
-        }
-      }
+      ForEachValidCorrespondence(
+          *corr_graph,
+          *pose_graph_,
+          *reconstruction_,
+          image_ids,
+          image_indices,
+          [&](size_t first, point2D_t point1, size_t second, point2D_t point2) {
+            observation_ids[first][point1] = 0;
+            observation_ids[second][point2] = 0;
+          });
 
       for (size_t image_index = 0; image_index < image_ids.size();
            ++image_index) {
@@ -252,28 +252,24 @@ void GlobalMapper::EstablishTracks(const GlobalMapperOptions& options) {
         return observation_id;
       };
 
-      for (const auto& pair : pose_graph_->ValidEdges()) {
-        const auto [image_id1, image_id2] = PairIdToImagePair(pair.first);
-        const auto& observation_ids1 =
-            observation_ids[image_indices.at(image_id1)];
-        const auto& observation_ids2 =
-            observation_ids[image_indices.at(image_id2)];
-        corr_graph->ExtractMatchesBetweenImages(image_id1, image_id2, matches);
-        for (const auto& match : matches) {
-          size_t root1 = find_root(observation_ids1[match.point2D_idx1]);
-          size_t root2 = find_root(observation_ids2[match.point2D_idx2]);
-          if (root1 == root2) {
-            continue;
-          }
-          if (component_sizes[root1] < component_sizes[root2] ||
-              (component_sizes[root1] == component_sizes[root2] &&
-               root2 < root1)) {
-            std::swap(root1, root2);
-          }
-          parents[root2] = root1;
-          component_sizes[root1] += component_sizes[root2];
-        }
-      }
+      ForEachValidCorrespondence(
+          *corr_graph,
+          *pose_graph_,
+          *reconstruction_,
+          image_ids,
+          image_indices,
+          [&](size_t first, point2D_t point1, size_t second, point2D_t point2) {
+            size_t root1 = find_root(observation_ids[first][point1]);
+            size_t root2 = find_root(observation_ids[second][point2]);
+            if (root1 == root2) return;
+            if (component_sizes[root1] < component_sizes[root2] ||
+                (component_sizes[root1] == component_sizes[root2] &&
+                 root2 < root1)) {
+              std::swap(root1, root2);
+            }
+            parents[root2] = root1;
+            component_sizes[root1] += component_sizes[root2];
+          });
 
       for (size_t observation_id = 0; observation_id < parents.size();
            ++observation_id) {

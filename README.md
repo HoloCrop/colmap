@@ -1,6 +1,22 @@
 COLMAP
 ======
 
+Fixed-rig mapping performance maintenance
+----------------------------------------
+
+Track construction uses `sfm/valid_correspondences.h` to traverse retained
+correspondences directly. Do not replace this with per-pair match extraction:
+that scans an image's complete adjacency list again for every neighboring image.
+The two linear passes retain compact observation indexing and deterministic
+track selection without storing another copy of the matches.
+
+Two small changes remain in shared upstream code because they remove work at
+its owner: `MaybeDecomposeRelativePoses` retrieves matches only for poses that
+need decomposition, and `GlobalPipeline` reuses its cache when a component
+contains every cached image. Subsets still use independent filtered caches;
+reconstructions own their mutable cameras, frames and images. Preserve these
+conditions when merging upstream changes.
+
 About
 -----
 

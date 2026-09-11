@@ -336,13 +336,18 @@ GlobalPipeline::ReconstructionStats GlobalPipeline::ReconstructMultiComponents(
                               static_cast<int>(components.size()),
                               static_cast<int>(image_ids.size())));
 
-    DatabaseCache::Options cache_options;
-    cache_options.image_names.reserve(image_ids.size());
-    for (const image_t image_id : image_ids) {
-      cache_options.image_names.insert(base.Image(image_id).Name());
+    // A full component can share the input cache: each reconstruction owns
+    // its mutable cameras, frames and images. Only subsets need filtering.
+    std::shared_ptr<DatabaseCache> component_cache = database_cache_;
+    if (image_ids.size() != database_cache_->NumImages()) {
+      DatabaseCache::Options cache_options;
+      cache_options.image_names.reserve(image_ids.size());
+      for (const image_t image_id : image_ids) {
+        cache_options.image_names.insert(base.Image(image_id).Name());
+      }
+      component_cache =
+          DatabaseCache::CreateFromCache(*database_cache_, cache_options);
     }
-    const std::shared_ptr<DatabaseCache> component_cache =
-        DatabaseCache::CreateFromCache(*database_cache_, cache_options);
 
     const std::optional<std::shared_ptr<Reconstruction>> reconstruction =
         ReconstructSingleComponent(component_cache, mapper_options);

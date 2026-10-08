@@ -49,6 +49,7 @@ set(ESTIMATORS_SRCS
     rig_calibration.h rig_calibration.cc
     rig_calibration_initialization.h rig_calibration_initialization.cc
     rig_calibration_observability.h rig_calibration_observability.cc
+    rig_calibration_distortion.h rig_calibration_distortion.cc
     rotation_averaging.h rotation_averaging.cc
     rotation_averaging_impl.h rotation_averaging_impl.cc
     triangulation.h triangulation.cc
@@ -163,6 +164,11 @@ COLMAP_ADD_TEST(
 COLMAP_ADD_TEST(
     NAME rig_calibration_test
     SRCS rig_calibration_test.cc
+    LINK_LIBS colmap_estimators
+)
+COLMAP_ADD_TEST(
+    NAME rig_calibration_distortion_test
+    SRCS rig_calibration_distortion_test.cc
     LINK_LIBS colmap_estimators
 )
 COLMAP_ADD_TEST(

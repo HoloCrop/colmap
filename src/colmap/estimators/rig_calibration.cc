@@ -31,12 +31,14 @@
 
 #include "colmap/estimators/cost_functions/manifold.h"
 #include "colmap/estimators/cost_functions/reprojection_error.h"
+#include "colmap/estimators/rig_calibration_distortion.h"
 #include "colmap/estimators/rig_calibration_observability.h"
 #include "colmap/math/math.h"
 #include "colmap/scene/camera.h"
 #include "colmap/scene/reconstruction.h"
 #include "colmap/sensor/models.h"
 #include "colmap/sensor/rig.h"
+#include "colmap/util/hash_containers.h"
 #include "colmap/util/logging.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/timer.h"
@@ -340,12 +342,34 @@ struct CeresRigCalibrator::Impl {
   void EnableGlobalCalibration() {
     Timer timer;
     timer.Start();
+    AddDistortionPriors();
     ConfigureGlobalCalibration(true);
     OrderGlobalParameterBlocks();
     timing.robust_setup_seconds += timer.ElapsedSeconds();
   }
 
   enum class CalibrationStage { LOCAL, FINAL_JOINT };
+
+  void AddDistortionPriors() {
+    if (!options.refine_distortion) {
+      return;
+    }
+    FlatHashMap<camera_t, size_t> observation_counts;
+    for (const auto& group : groups) {
+      for (const auto& track : group.tracks) {
+        for (const auto& observation : track.observations) {
+          ++observation_counts[observation.camera_id];
+        }
+      }
+    }
+    for (const camera_t camera_id : rig_camera_ids) {
+      Camera& camera = reconstruction.Camera(camera_id);
+      if (camera.model_id == FullOpenCVCameraModel::model_id) {
+        AddFullOpenCVDistortionPrior(
+            *problem, camera, observation_counts[camera_id]);
+      }
+    }
+  }
 
   void BuildProblem(const CalibrationStage stage) {
     Timer timer;
@@ -437,6 +461,9 @@ struct CeresRigCalibrator::Impl {
     }
 
     AddGlobalParameterBlocks();
+    if (refine_global_calibration) {
+      AddDistortionPriors();
+    }
     ConfigureGlobalCalibration(refine_global_calibration);
 
     for (const internal::RigCalibrationObservabilityGroupData& group_data :

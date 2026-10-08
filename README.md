@@ -41,6 +41,20 @@ CASPAR variants retain their existing packing path. Positioning
 scratch buffers are reused within one call; solver membership and topology are
 rebuilt after filtering in each bundle-adjustment round.
 
+Rig calibration distortion fitting
+----------------------------------
+
+Rig calibration refines all eight FULL_OPENCV distortion coefficients.
+`estimators/rig_calibration_distortion.{h,cc}` adds a weak, zero-centered prior
+on the three rational denominator terms in the joint fitting stages. Terms are
+normalized to the sensor's image radius and weighted by observation count. This
+discourages poorly observed numerator/denominator cancellations that can fit
+feature tracks while creating poles or folds at image corners. The model and
+its eight free coefficients are unchanged. Held-out evaluation keeps calibration
+fixed and does not add this fitting prior; observability reports image evidence
+without counting the prior as evidence. Full-image projection validation remains
+required before publishing any calibration.
+
 About
 -----
 

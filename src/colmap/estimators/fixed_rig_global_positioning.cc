@@ -1,5 +1,7 @@
 #include "colmap/estimators/fixed_rig_global_positioning.h"
 
+#include "colmap/estimators/fixed_rig_pose_priors.h"
+
 #include "colmap/math/math.h"
 #include "colmap/math/random.h"
 #include "colmap/util/cuda.h"
@@ -226,50 +228,76 @@ bool FixedRigGlobalPositioner::InitializePositionsFromPosePriors(
     const Reconstruction& reconstruction,
     const std::vector<PosePrior>& pose_priors,
     const FlatHashSet<frame_t>& constrained_frame_ids) {
-  NodeHashMap<image_t, Eigen::Vector3d> image_positions;
+  const NodeHashMap<frame_t, const PosePrior*> frame_pose_priors =
+      FramePosePriors(reconstruction, pose_priors);
   NodeHashMap<frame_t, Eigen::Vector3d> frame_positions;
-  for (const PosePrior& prior : pose_priors) {
-    if (!prior.HasPosition() ||
-        prior.corr_data_id.sensor_id.type != SensorType::CAMERA ||
-        !reconstruction.ExistsImage(prior.corr_data_id.id)) {
-      continue;
-    }
-    const image_t image_id = prior.corr_data_id.id;
-    const Image& image = reconstruction.Image(image_id);
-    image_positions.emplace(image_id, prior.position);
-    if (image.IsRefInFrame() && constrained_frame_ids.count(image.FrameId())) {
-      frame_positions.emplace(image.FrameId(), prior.position);
+  for (const auto& [frame_id, pose_prior] : frame_pose_priors) {
+    if (pose_prior->HasPosition()) {
+      frame_positions.emplace(frame_id, pose_prior->position);
     }
   }
-  if (frame_positions.size() < constrained_frame_ids.size()) {
-    return false;
+  for (const frame_t frame_id : constrained_frame_ids) {
+    if (frame_positions.count(frame_id) == 0) {
+      return false;
+    }
   }
 
-  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-  for (const auto& [pair_id, edge] : pose_graph.ValidEdges()) {
-    const auto [image_id1, image_id2] = PairIdToImagePair(pair_id);
-    const auto prior1 = image_positions.find(image_id1);
-    const auto prior2 = image_positions.find(image_id2);
-    if (prior1 == image_positions.end() || prior2 == image_positions.end()) {
-      continue;
+  // Camera center relative to its rig origin, rotated into the world frame of
+  // the averaged rotations.
+  auto world_lever_arm = [&reconstruction](const Image& image) {
+    if (image.IsRefInFrame()) {
+      return Eigen::Vector3d::Zero().eval();
     }
-    const Eigen::Vector3d prior_direction = prior2->second - prior1->second;
-    if (prior_direction.squaredNorm() == 0.0) {
-      continue;
+    const Rigid3d& cam_from_rig =
+        reconstruction.Rig(image.FramePtr()->RigId())
+            .SensorFromRig(image.CameraPtr()->SensorId());
+    return (image.FramePtr()->RigFromWorld().rotation().inverse() *
+            cam_from_rig.TgtOriginInSrc())
+        .eval();
+  };
+
+  // Align camera baseline directions with the same baselines between prior
+  // positions. Prior camera centers are rig origins plus lever arms rotated
+  // by world_from_prior, so start from rig origins and refine.
+  Eigen::Matrix3d world_from_prior = Eigen::Matrix3d::Identity();
+  constexpr int kNumLeverArmIterations = 10;
+  for (int iteration = 0; iteration < kNumLeverArmIterations; ++iteration) {
+    Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+    for (const auto& [pair_id, edge] : pose_graph.ValidEdges()) {
+      const auto [image_id1, image_id2] = PairIdToImagePair(pair_id);
+      const Image& image1 = reconstruction.Image(image_id1);
+      const Image& image2 = reconstruction.Image(image_id2);
+      if (image1.FrameId() == image2.FrameId()) {
+        continue;
+      }
+      const auto prior1 = frame_positions.find(image1.FrameId());
+      const auto prior2 = frame_positions.find(image2.FrameId());
+      if (prior1 == frame_positions.end() || prior2 == frame_positions.end()) {
+        continue;
+      }
+      Eigen::Vector3d prior_direction = prior2->second - prior1->second;
+      if (iteration > 0) {
+        prior_direction += world_from_prior.transpose() *
+                           (world_lever_arm(image2) - world_lever_arm(image1));
+      }
+      if (prior_direction.squaredNorm() == 0.0) {
+        continue;
+      }
+      const Eigen::Vector3d world_direction =
+          image1.CamFromWorld().rotation().inverse() *
+          edge.cam2_from_cam1.TgtOriginInSrc();
+      covariance += edge.num_matches * world_direction.normalized() *
+                    prior_direction.normalized().transpose();
     }
-    const Eigen::Vector3d world_direction =
-        reconstruction.Image(image_id1).CamFromWorld().rotation().inverse() *
-        edge.cam2_from_cam1.TgtOriginInSrc();
-    covariance += edge.num_matches * world_direction.normalized() *
-                  prior_direction.normalized().transpose();
+    const Eigen::JacobiSVD<Eigen::Matrix3d> decomposition(
+        covariance, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::Matrix3d sign = Eigen::Matrix3d::Identity();
+    sign(2, 2) =
+        (decomposition.matrixU() * decomposition.matrixV().transpose())
+            .determinant();
+    world_from_prior =
+        decomposition.matrixU() * sign * decomposition.matrixV().transpose();
   }
-  const Eigen::JacobiSVD<Eigen::Matrix3d> decomposition(
-      covariance, Eigen::ComputeFullU | Eigen::ComputeFullV);
-  Eigen::Matrix3d sign = Eigen::Matrix3d::Identity();
-  sign(2, 2) = (decomposition.matrixU() * decomposition.matrixV().transpose())
-                   .determinant();
-  const Eigen::Matrix3d world_from_prior =
-      decomposition.matrixU() * sign * decomposition.matrixV().transpose();
 
   Eigen::Vector3d mean = Eigen::Vector3d::Zero();
   for (const frame_t frame_id : constrained_frame_ids) {

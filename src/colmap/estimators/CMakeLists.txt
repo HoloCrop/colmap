@@ -41,6 +41,7 @@ set(ESTIMATORS_SRCS
     fixed_rig_two_view_geometry.h fixed_rig_two_view_geometry.cc
     fundamental_matrix_degensac.h fundamental_matrix_degensac.cc
     fixed_rig_global_positioning.h fixed_rig_global_positioning.cc
+    fixed_rig_pose_priors.h fixed_rig_pose_priors.cc
     fixed_rig_rotation_averaging.h fixed_rig_rotation_averaging.cc
     generalized_pose.h generalized_pose.cc
     global_positioning.h global_positioning.cc

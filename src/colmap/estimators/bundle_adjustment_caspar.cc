@@ -645,20 +645,17 @@ class CasparBundleAdjuster : public BundleAdjuster {
       }
     }
 
-    // Require a ref-sensor image so fixing the frame moves factors into
-    // fixed-pose variants rather than being silently skipped.
-    for (const image_t image_id : sorted_image_ids) {
-      const Image& image = reconstruction_.Image(image_id);
-      if (image.IsRefInFrame()) {
-        gauge_fixed_frames_.insert(image.FrameId());
-        VLOG(1) << "Gauge fix: fixed frame " << image.FrameId() << " (image "
-                << image_id << ") for TWO_CAMS_FROM_WORLD";
-        return;
-      }
+    // Every factor carries its sensor_from_rig as constant data, so fixing a
+    // frame moves all of its observations into fixed-pose variants whether or
+    // not the rig's reference sensor is a camera with an image in the frame.
+    if (sorted_image_ids.empty()) {
+      return;
     }
-
-    LOG(WARNING) << "Caspar TWO_CAMS_FROM_WORLD gauge fix: no ref-sensor "
-                    "frame found, gauge left unfixed.";
+    const image_t image_id = sorted_image_ids.front();
+    const frame_t frame_id = reconstruction_.Image(image_id).FrameId();
+    gauge_fixed_frames_.insert(frame_id);
+    VLOG(1) << "Gauge fix: fixed frame " << frame_id << " (image " << image_id
+            << ") for TWO_CAMS_FROM_WORLD";
   }
 
   // Three-point gauge fix: mirrors the Ceres BA equivalent but promotes points

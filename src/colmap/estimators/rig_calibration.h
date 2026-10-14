@@ -57,9 +57,13 @@ struct RigCalibrationTrack {
 };
 
 struct RigCalibrationDistancePrior {
-  // Metric distance between the first and last rig centers in the group.
+  // Metric distance travelled by point_in_rig between the first and last
+  // frames of the group.
   double distance = 0.0;
   double stddev = 1.0;
+  // Point fixed in the rig frame whose positions were measured, such as the
+  // origin of a position sensor. Defaults to the reference sensor.
+  Eigen::Vector3d point_in_rig = Eigen::Vector3d::Zero();
 };
 
 struct RigCalibrationGroup {

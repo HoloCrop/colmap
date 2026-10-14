@@ -97,9 +97,13 @@ struct RelativeDirectionCost {
   }
 };
 
+// Distance travelled by a point fixed in the rig, with frame rotations held at
+// their initialized values: the point's displacement is the rig centers'
+// displacement plus a constant rotated lever-arm term.
 struct EndpointDistanceCost {
   double distance;
   double stddev;
+  Eigen::Vector3d lever_arm_displacement;
 
   template <typename T>
   bool operator()(const T* const first_center,
@@ -107,7 +111,8 @@ struct EndpointDistanceCost {
                   T* residuals) const {
     const Eigen::Matrix<T, 3, 1> displacement =
         Eigen::Map<const Eigen::Matrix<T, 3, 1>>(last_center) -
-        Eigen::Map<const Eigen::Matrix<T, 3, 1>>(first_center);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>>(first_center) +
+        lever_arm_displacement.cast<T>();
     residuals[0] = (displacement.norm() - T(distance)) / T(stddev);
     return true;
   }
@@ -283,9 +288,13 @@ class RigCalibrationInitializer {
                             loss.get()));
       }
       const auto& prior = groups[group_index].first_to_last_distance;
+      const Eigen::Vector3d lever_arm_displacement =
+          frames.back().rotation.conjugate() * prior.point_in_rig -
+          frames.front().rotation.conjugate() * prior.point_in_rig;
       data.non_track_residual_blocks.push_back(problem.AddResidualBlock(
           new ceres::AutoDiffCostFunction<EndpointDistanceCost, 1, 3, 3>(
-              new EndpointDistanceCost{prior.distance, prior.stddev}),
+              new EndpointDistanceCost{
+                  prior.distance, prior.stddev, lever_arm_displacement}),
           distance_loss.get(),
           frames.front().center.data(),
           frames.back().center.data()));

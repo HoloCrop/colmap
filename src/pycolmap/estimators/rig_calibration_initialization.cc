@@ -38,8 +38,14 @@ RigCalibrationInitializationResult InitializeRigCalibrationPacked(
     const Uint32Array& camera_ids,
     const DoubleArray& rigs_from_group,
     const DoubleArray& first_to_last_distances,
-    const double distance_stddev) {
+    const double distance_stddev,
+    const DoubleArray& distance_point_in_rig) {
   THROW_CHECK_EQ(rigs_from_group.ndim(), 4);
+  THROW_CHECK_EQ(distance_point_in_rig.ndim(), 1);
+  THROW_CHECK_EQ(distance_point_in_rig.shape(0), 3);
+  const Eigen::Vector3d point_in_rig(distance_point_in_rig.at(0),
+                                     distance_point_in_rig.at(1),
+                                     distance_point_in_rig.at(2));
   THROW_CHECK_EQ(rigs_from_group.shape(2), 3);
   THROW_CHECK_EQ(rigs_from_group.shape(3), 4);
   const ssize_t num_groups = rigs_from_group.shape(0);
@@ -66,8 +72,8 @@ RigCalibrationInitializationResult InitializeRigCalibrationPacked(
   std::vector<RigCalibrationInitializationGroup> groups(num_groups);
   for (ssize_t group_index = 0; group_index < num_groups; ++group_index) {
     auto& group = groups[group_index];
-    group.first_to_last_distance = {input_distances(group_index),
-                                    distance_stddev};
+    group.first_to_last_distance = {
+        input_distances(group_index), distance_stddev, point_in_rig};
     group.rigs_from_group.reserve(group_size);
     for (ssize_t frame_index = 0; frame_index < group_size; ++frame_index) {
       Eigen::Matrix3x4d matrix;
@@ -162,6 +168,7 @@ void BindRigCalibrationInitialization(py::module& m) {
       "rigs_from_group"_a.noconvert(),
       "first_to_last_distances"_a.noconvert(),
       "distance_stddev"_a,
+      "distance_point_in_rig"_a.noconvert(),
       "Initialize camera extrinsics and group frame poses from independent "
       "two-view geometry, using measured endpoint distances for metric scale.");
 }

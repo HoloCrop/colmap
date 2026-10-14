@@ -28,6 +28,7 @@ std::unique_ptr<CeresRigCalibrator> CreateCeresRigCalibratorPacked(
     const DoubleArray& rigs_from_group,
     const DoubleArray& first_to_last_distances,
     const double distance_stddev,
+    const DoubleArray& distance_point_in_rig,
     const Uint64Array& group_track_offsets,
     const Uint64Array& track_observation_offsets,
     const DoubleArray& xyz,
@@ -43,6 +44,11 @@ std::unique_ptr<CeresRigCalibrator> CreateCeresRigCalibratorPacked(
 
   THROW_CHECK_EQ(first_to_last_distances.ndim(), 1);
   THROW_CHECK_EQ(first_to_last_distances.shape(0), num_groups);
+  THROW_CHECK_EQ(distance_point_in_rig.ndim(), 1);
+  THROW_CHECK_EQ(distance_point_in_rig.shape(0), 3);
+  const Eigen::Vector3d point_in_rig(distance_point_in_rig.at(0),
+                                     distance_point_in_rig.at(1),
+                                     distance_point_in_rig.at(2));
   THROW_CHECK_EQ(group_track_offsets.ndim(), 1);
   THROW_CHECK_EQ(group_track_offsets.shape(0), num_groups + 1);
 
@@ -105,6 +111,7 @@ std::unique_ptr<CeresRigCalibrator> CreateCeresRigCalibratorPacked(
     group.first_to_last_distance.distance =
         first_to_last_distances_view(group_idx);
     group.first_to_last_distance.stddev = distance_stddev;
+    group.first_to_last_distance.point_in_rig = point_in_rig;
 
     const uint64_t track_begin = group_track_offsets_view(group_idx);
     const uint64_t track_end = group_track_offsets_view(group_idx + 1);
@@ -147,6 +154,7 @@ void BindRigCalibrationPacked(py::module& m) {
         "rigs_from_group"_a,
         "first_to_last_distances"_a,
         "distance_stddev"_a,
+        "distance_point_in_rig"_a,
         "group_track_offsets"_a,
         "track_observation_offsets"_a,
         "xyz"_a,

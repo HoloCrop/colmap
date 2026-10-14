@@ -60,26 +60,30 @@ constexpr double kObservabilityRankTolerance = 1e-10;
 class RigCenterDistanceCostFunctor
     : public AutoDiffCostFunctor<RigCenterDistanceCostFunctor, 1, 7, 7> {
  public:
-  RigCenterDistanceCostFunctor(const double distance, const double stddev)
-      : distance_(distance), inv_stddev_(1.0 / stddev) {}
+  explicit RigCenterDistanceCostFunctor(const RigCalibrationDistancePrior& prior)
+      : distance_(prior.distance),
+        inv_stddev_(1.0 / prior.stddev),
+        point_in_rig_(prior.point_in_rig) {}
 
   template <typename T>
   bool operator()(const T* const rig1_from_group,
                   const T* const rig2_from_group,
                   T* residuals) const {
-    const Eigen::Matrix<T, 3, 1> center1 =
+    const Eigen::Matrix<T, 3, 1> point_in_rig = point_in_rig_.cast<T>();
+    const Eigen::Matrix<T, 3, 1> point1 =
         EigenQuaternionMap<T>(rig1_from_group).inverse() *
-        -EigenVector3Map<T>(rig1_from_group + 4);
-    const Eigen::Matrix<T, 3, 1> center2 =
+        (point_in_rig - EigenVector3Map<T>(rig1_from_group + 4));
+    const Eigen::Matrix<T, 3, 1> point2 =
         EigenQuaternionMap<T>(rig2_from_group).inverse() *
-        -EigenVector3Map<T>(rig2_from_group + 4);
-    residuals[0] = ((center2 - center1).norm() - T(distance_)) * T(inv_stddev_);
+        (point_in_rig - EigenVector3Map<T>(rig2_from_group + 4));
+    residuals[0] = ((point2 - point1).norm() - T(distance_)) * T(inv_stddev_);
     return true;
   }
 
  private:
   double distance_;
   double inv_stddev_;
+  Eigen::Vector3d point_in_rig_;
 };
 
 std::unique_ptr<ceres::LossFunction> CreateLossFunction(
@@ -438,8 +442,7 @@ struct CeresRigCalibrator::Impl {
 
       const RigCalibrationDistancePrior& prior = group.first_to_last_distance;
       const ceres::ResidualBlockId distance_residual =
-          problem->AddResidualBlock(RigCenterDistanceCostFunctor::Create(
-                                        prior.distance, prior.stddev),
+          problem->AddResidualBlock(RigCenterDistanceCostFunctor::Create(prior),
                                     distance_loss.get(),
                                     group.rigs_from_group.front().params.data(),
                                     group.rigs_from_group.back().params.data());
@@ -664,10 +667,13 @@ struct CeresRigCalibrator::Impl {
     summary->distance_prior_errors.reserve(groups.size());
     double squared_distance_error = 0.0;
     for (const RigCalibrationGroup& group : groups) {
-      const double error = (group.rigs_from_group.back().TgtOriginInSrc() -
-                            group.rigs_from_group.front().TgtOriginInSrc())
+      const RigCalibrationDistancePrior& prior = group.first_to_last_distance;
+      const double error = (Inverse(group.rigs_from_group.back()) *
+                                prior.point_in_rig -
+                            Inverse(group.rigs_from_group.front()) *
+                                prior.point_in_rig)
                                .norm() -
-                           group.first_to_last_distance.distance;
+                           prior.distance;
       summary->distance_prior_errors.push_back(error);
       squared_distance_error += error * error;
     }

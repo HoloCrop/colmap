@@ -232,7 +232,9 @@ bool FixedRigGlobalPositioner::InitializePositionsFromPosePriors(
       FramePosePriors(reconstruction, pose_priors);
   NodeHashMap<frame_t, Eigen::Vector3d> frame_positions;
   for (const auto& [frame_id, pose_prior] : frame_pose_priors) {
-    if (pose_prior->HasPosition()) {
+    if (pose_prior->HasPosition() &&
+        pose_prior->coordinate_system ==
+            PosePrior::CoordinateSystem::CARTESIAN) {
       frame_positions.emplace(frame_id, pose_prior->position);
     }
   }
@@ -304,14 +306,11 @@ bool FixedRigGlobalPositioner::InitializePositionsFromPosePriors(
     mean += frame_positions.at(frame_id);
   }
   mean /= constrained_frame_ids.size();
-  double squared_scale = 0.0;
-  for (const frame_t frame_id : constrained_frame_ids) {
-    squared_scale += (frame_positions.at(frame_id) - mean).squaredNorm();
-  }
-  const double scale = std::sqrt(squared_scale / constrained_frame_ids.size());
+  // Frame constraints and point constraints are metric through the calibrated
+  // lever arms, so the prior positions keep their metric scale.
   for (const frame_t frame_id : constrained_frame_ids) {
     frame_centers_[frame_id] =
-        world_from_prior * (frame_positions.at(frame_id) - mean) / scale;
+        world_from_prior * (frame_positions.at(frame_id) - mean);
   }
   LOG(INFO) << "Initialized " << constrained_frame_ids.size()
             << " fixed-rig frame positions from pose priors";

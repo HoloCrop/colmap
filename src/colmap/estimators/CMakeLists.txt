@@ -64,6 +64,7 @@ if(CASPAR_ENABLED)
         bundle_adjustment_arrays_caspar.h
         bundle_adjustment_arrays_caspar.cc
         caspar/row_reprojection_validation.h
+        caspar/surface_normalization.h
         point_refinement_caspar.h
         point_refinement_caspar.cc
         row_point_refinement_caspar.h
@@ -74,6 +75,8 @@ if(CASPAR_ENABLED)
         row_bundle_adjustment_caspar.cc
         row_section_bundle_adjustment_caspar.h
         row_section_bundle_adjustment_caspar.cc
+        surface_bundle_adjustment_caspar.h
+        surface_bundle_adjustment_caspar.cc
     )
 endif()
 

@@ -87,6 +87,22 @@ class ConstLogScalePriorSqrtInformation(sf.V1):
     pass
 
 
+class ConstRigPoint(sf.V3):
+    pass  # a point fixed in its rig frame
+
+
+class ConstSurfacePosition(sf.V3):
+    pass
+
+
+class ConstSurfaceSqrtWeight(sf.V1):
+    pass
+
+
+class ConstSurfaceRobust(sf.V2):
+    pass  # [Geman-McClure scale, margin]
+
+
 # Calibration node layout:
 #
 # When both focal_and_extra/focal and principal_point are tunable, they
@@ -434,6 +450,27 @@ def fixed_camera_pinhole_point(
     )
 
 
+def rig_surface(
+    pose: T.Annotated[PinholePose, mem.TunableShared],
+    rig_point: T.Annotated[ConstRigPoint, mem.ConstantSequential],
+    position: T.Annotated[ConstSurfacePosition, mem.ConstantSequential],
+    sqrt_weight: T.Annotated[ConstSurfaceSqrtWeight, mem.ConstantSequential],
+    robust: T.Annotated[ConstSurfaceRobust, mem.ConstantUnique],
+) -> sf.V3:
+    """Robust distance from a point carried by a rig frame to a fixed position.
+
+    pose holds rig_from_world. The offset's length beyond the margin goes
+    through a Geman-McClure kernel; sqrt_weight scales the result against the
+    other factors' units.
+    """
+    offset = pose.inverse() * rig_point - position
+    distance = sf.sqrt(offset.squared_norm() + sf.epsilon())
+    scale, margin = robust
+    outside = sf.Max(distance - margin, 0)
+    robust_distance = scale * outside / sf.sqrt(outside**2 + scale**2)
+    return sqrt_weight[0] * robust_distance / distance * offset
+
+
 # Split cores delegate to merged cores to avoid duplicating projection math.
 
 
@@ -578,6 +615,9 @@ register_camera_model(
     FIXABLE_PINHOLE_SPLIT,
     must_fix_one_of={"focal", "principal_point"},
 )
+
+# Registered last: its count is the final CreateSolver factor argument.
+caslib.add_factor(rig_surface)
 
 out_dir = Path(f"{sys.argv[1]}")
 print(f"Generating Caspar kernels with precision {precision}: {out_dir}")

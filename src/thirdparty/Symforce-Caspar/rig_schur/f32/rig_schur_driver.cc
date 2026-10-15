@@ -69,7 +69,7 @@ void GraphSolver::SetFixedRigSchurTopology(
 void GraphSolver::SetRowFixedRigSchurTopology(
     const std::vector<unsigned int>& pose_indices,
     const std::vector<unsigned int>& point_indices,
-    const unsigned int rotation_anchor_pose_index,
+    const int rotation_anchor_pose_index,
     const bool refine_scale) {
   if (pose_indices.size() != row_fixed_rig_pinhole_num_ ||
       point_indices.size() != row_fixed_rig_pinhole_num_) {
@@ -86,7 +86,7 @@ void GraphSolver::SetRowFixedRigSchurTopology(
       std::vector<unsigned int>{},
       std::vector<unsigned int>{},
       refine_scale,
-      static_cast<int>(rotation_anchor_pose_index));
+      rotation_anchor_pose_index);
   rig_schur_mode_ = RigSchurMode::ROW_FIXED_RIG;
 }
 

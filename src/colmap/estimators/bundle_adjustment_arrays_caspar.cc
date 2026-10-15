@@ -12,6 +12,8 @@ namespace colmap::bundle_adjustment_arrays {
 namespace {
 
 using PackedPose = Eigen::Matrix<StorageType, 7, 1>;
+using PackedSensorCalibration = Eigen::Matrix<StorageType, 11, 1>;
+using InputCalibration = Eigen::Matrix<float, 4, 1>;
 
 constexpr double kNormalizationExtent = 10.0;
 constexpr double kNormalizationMinPercentile = 0.1;
@@ -102,6 +104,20 @@ NormalizedProblem NormalizeProblem(
   }
   TransformPoints(problem.points, problem.normalized_from_metric);
   return problem;
+}
+
+std::vector<StorageType> PackSensorCalibrations(
+    const std::vector<Rigid3d>& sensors_from_rig,
+    const float* sensor_calibrations) {
+  std::vector<StorageType> packed(11 * sensors_from_rig.size());
+  for (size_t sensor = 0; sensor < sensors_from_rig.size(); ++sensor) {
+    Eigen::Map<PackedSensorCalibration> output(packed.data() + 11 * sensor);
+    output.head<7>() = sensors_from_rig[sensor].params.cast<StorageType>();
+    output.tail<4>() =
+        Eigen::Map<const InputCalibration>(sensor_calibrations + 4 * sensor)
+            .cast<StorageType>();
+  }
+  return packed;
 }
 
 std::vector<StorageType> PackPoses(const std::vector<Rigid3d>& poses) {

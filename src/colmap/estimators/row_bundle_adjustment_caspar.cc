@@ -18,8 +18,6 @@ namespace colmap {
 namespace {
 
 using Clock = std::chrono::steady_clock;
-using PackedSensorCalibration = Eigen::Matrix<StorageType, 11, 1>;
-using InputCalibration = Eigen::Matrix<float, 4, 1>;
 using InputSqrtInformation = Eigen::Matrix<float, 3, 3, Eigen::RowMajor>;
 using PackedSqrtInformation = Eigen::Matrix<StorageType, 3, 3>;
 
@@ -44,20 +42,6 @@ struct NormalizedPriors {
   std::vector<StorageType> positions;
   std::vector<StorageType> sqrt_information;
 };
-
-std::vector<StorageType> PackSensorCalibrations(
-    const std::vector<Rigid3d>& sensors_from_rig,
-    const float* sensor_calibrations) {
-  std::vector<StorageType> packed(11 * sensors_from_rig.size());
-  for (size_t sensor = 0; sensor < sensors_from_rig.size(); ++sensor) {
-    Eigen::Map<PackedSensorCalibration> output(packed.data() + 11 * sensor);
-    output.head<7>() = sensors_from_rig[sensor].params.cast<StorageType>();
-    output.tail<4>() =
-        Eigen::Map<const InputCalibration>(sensor_calibrations + 4 * sensor)
-            .cast<StorageType>();
-  }
-  return packed;
-}
 
 std::vector<StorageType> NormalizeSqrtInformation(
     const float* prior_sqrt_information,
@@ -202,7 +186,8 @@ CasparRowBundleResult OptimizeRowCaspar(
       bundle_adjustment_arrays::PackPoses(problem.rigs_from_world);
   std::vector<StorageType> point_data = std::move(problem.points);
   const std::vector<StorageType> packed_sensor_calibrations =
-      PackSensorCalibrations(problem.sensors_from_rig, sensor_calibrations);
+      bundle_adjustment_arrays::PackSensorCalibrations(problem.sensors_from_rig,
+                                                       sensor_calibrations);
   const double preparation_seconds = ElapsedSeconds(preparation_start);
 
   const Clock::time_point optimization_start = Clock::now();

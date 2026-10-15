@@ -123,7 +123,8 @@ if(CASPAR_ENABLED AND CUDA_ENABLED)
     set(CASPAR_ROW_VALIDATION_DIR
         "${CMAKE_SOURCE_DIR}/src/colmap/estimators/caspar")
     target_sources(caspar_lib_core PRIVATE
-        "${CASPAR_ROW_VALIDATION_DIR}/row_reprojection_validation.cu")
+        "${CASPAR_ROW_VALIDATION_DIR}/row_reprojection_validation.cu"
+        "${CASPAR_ROW_VALIDATION_DIR}/surface_normalization.cu")
     target_include_directories(caspar_lib_core PRIVATE
         "${CMAKE_SOURCE_DIR}/src")
     set_source_files_properties(

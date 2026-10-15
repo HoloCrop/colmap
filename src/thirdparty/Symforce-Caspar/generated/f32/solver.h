@@ -146,6 +146,7 @@ class GraphSolver {
    * @param pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max
    * the maximum number of
    * pinhole_split_fixed_focal_fixed_principal_point_fixed_points
+   * @param rig_surface_num_max the maximum number of rig_surfaces
    */
   GraphSolver(
       const SolverParams<double>& params,
@@ -203,6 +204,7 @@ class GraphSolver {
       size_t pinhole_split_fixed_pose_fixed_principal_point_fixed_point_num_max,
       size_t
           pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max,
+      size_t rig_surface_num_max,
       int device_id = 0);
 
   // This class is managing cuda memory and cannot be copied.
@@ -240,7 +242,8 @@ class GraphSolver {
   void SetRowFixedRigSchurTopology(
       const std::vector<unsigned int>& pose_indices,
       const std::vector<unsigned int>& point_indices,
-      unsigned int rotation_anchor_pose_index, bool refine_scale = true);
+      int rotation_anchor_pose_index,
+      bool refine_scale = true);
 
   SolveResult solve_rig_schur(bool print_progress = false,
                               bool verbose_logging = false);
@@ -4696,6 +4699,104 @@ class GraphSolver {
    */
   void SetPinholeSplitFixedFocalFixedPrincipalPointFixedPointNum(size_t num);
 
+  /**
+   * Set the indices for the pose argument for the RigSurface factor from host.
+   */
+  void SetRigSurfacePoseIndicesFromHost(const unsigned int* const indices,
+                                        size_t num);
+
+  /**
+   * Set the indices for the pose argument for the RigSurface factor from
+   * device.
+   */
+  void SetRigSurfacePoseIndicesFromDevice(const unsigned int* const indices,
+                                          size_t num);
+
+  /**
+   * Set the values for the rig_point consts RigSurface factor from stacked host
+   * data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfaceRigPointDataFromStackedHost(const float* const data,
+                                                size_t offset,
+                                                size_t num);
+
+  /**
+   * Set the values for the rig_point consts RigSurface factor from stacked
+   * device data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfaceRigPointDataFromStackedDevice(const float* const data,
+                                                  size_t offset,
+                                                  size_t num);
+
+  /**
+   * Set the values for the position consts RigSurface factor from stacked host
+   * data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfacePositionDataFromStackedHost(const float* const data,
+                                                size_t offset,
+                                                size_t num);
+
+  /**
+   * Set the values for the position consts RigSurface factor from stacked
+   * device data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfacePositionDataFromStackedDevice(const float* const data,
+                                                  size_t offset,
+                                                  size_t num);
+
+  /**
+   * Set the values for the sqrt_weight consts RigSurface factor from stacked
+   * host data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfaceSqrtWeightDataFromStackedHost(const float* const data,
+                                                  size_t offset,
+                                                  size_t num);
+
+  /**
+   * Set the values for the sqrt_weight consts RigSurface factor from stacked
+   * device data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfaceSqrtWeightDataFromStackedDevice(const float* const data,
+                                                    size_t offset,
+                                                    size_t num);
+
+  /**
+   * Set the values for the robust consts RigSurface factor from stacked host
+   * data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfaceRobustDataFromStackedHost(const float* const data);
+
+  /**
+   * Set the values for the robust consts RigSurface factor from stacked device
+   * data.
+   *
+   * The offset can be used to start writing from a specific index.
+   */
+  void SetRigSurfaceRobustDataFromStackedDevice(const float* const data);
+
+  /**
+   * Set the current number of RigSurface factors.
+   *
+   * The value is set during initialization and this function is only needed if
+   * you want to change the problem between optimization runs. This is work in
+   * progress and can have performance impacts.
+   */
+  void SetRigSurfaceNum(size_t num);
+
  private:
   SolverParams<float> params_;
   int device_id_;
@@ -4814,6 +4915,8 @@ class GraphSolver {
   size_t pinhole_split_fixed_pose_fixed_principal_point_fixed_point_num_max_;
   size_t pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_;
   size_t pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max_;
+  size_t rig_surface_num_;
+  size_t rig_surface_num_max_;
 
   size_t get_nbytes();
   float LinearizeFirst();
@@ -5193,6 +5296,11 @@ class GraphSolver {
       facs__pinhole_split_fixed_focal_fixed_principal_point_fixed_point__args__principal_point__data_;
   float*
       facs__pinhole_split_fixed_focal_fixed_principal_point_fixed_point__args__point__data_;
+  SharedIndex* facs__rig_surface__args__pose__idx_shared_;
+  float* facs__rig_surface__args__rig_point__data_;
+  float* facs__rig_surface__args__position__data_;
+  float* facs__rig_surface__args__sqrt_weight__data_;
+  float* facs__rig_surface__args__robust__data_;
   float* marker__scratch_inout_;
   float* facs__simple_radial__res_;
   float* facs__simple_radial_fixed_pose__res_;
@@ -5236,6 +5344,7 @@ class GraphSolver {
   float* facs__pinhole_split_fixed_pose_fixed_principal_point_fixed_point__res_;
   float*
       facs__pinhole_split_fixed_focal_fixed_principal_point_fixed_point__res_;
+  float* facs__rig_surface__res_;
   float* facs__simple_radial__args__pose__jac_;
   float* facs__simple_radial__args__calib__jac_;
   float* facs__simple_radial__args__point__jac_;
@@ -5332,6 +5441,7 @@ class GraphSolver {
       facs__pinhole_split_fixed_pose_fixed_principal_point_fixed_point__args__focal__jac_;
   float*
       facs__pinhole_split_fixed_focal_fixed_principal_point_fixed_point__args__pose__jac_;
+  float* facs__rig_surface__args__pose__jac_;
   float* nodes__PinholeCalib__z_;
   float* nodes__PinholeCalib__z_end__;
   float* nodes__PinholeFocal__z_;
@@ -5504,6 +5614,7 @@ class GraphSolver {
   float* facs__pinhole_split_fixed_pose_fixed_focal_fixed_point__jp_;
   float* facs__pinhole_split_fixed_pose_fixed_principal_point_fixed_point__jp_;
   float* facs__pinhole_split_fixed_focal_fixed_principal_point_fixed_point__jp_;
+  float* facs__rig_surface__jp_;
   float* marker__jp_end_;
   float* solver__current_diag_;
   float* solver__alpha_numerator_;

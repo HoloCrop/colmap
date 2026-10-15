@@ -75,6 +75,7 @@ struct CasparSolverSizing {
   size_t num_pinhole_split_fixed_pose_fixed_focal_fixed_point = 0;
   size_t num_pinhole_split_fixed_pose_fixed_principal_point_fixed_point = 0;
   size_t num_pinhole_split_fixed_focal_fixed_principal_point_fixed_point = 0;
+  size_t num_rig_surface = 0;
 };
 
 // One implementation per camera model.
@@ -930,7 +931,8 @@ inline std::unique_ptr<ICasparModelAdapter> CreateCasparAdapter(
 //        simple_radial (4) → pinhole (4) → fixed_rig (4) →
 //        row_fixed_rig_pinhole (1) →
 //        fixed_camera_pinhole_point (1) →
-//        simple_radial_split (11) → pinhole_split (11)
+//        simple_radial_split (11) → pinhole_split (11) →
+//        rig_surface (1)
 inline caspar::GraphSolver CreateSolver(
     const caspar::SolverParams<double>& params,
     const CasparSolverSizing& sz,
@@ -1002,6 +1004,7 @@ inline caspar::GraphSolver CreateSolver(
       sz.num_pinhole_split_fixed_pose_fixed_focal_fixed_point,            // r=3
       sz.num_pinhole_split_fixed_pose_fixed_principal_point_fixed_point,  // r=3
       sz.num_pinhole_split_fixed_focal_fixed_principal_point_fixed_point,  // r=3
+      sz.num_rig_surface,
       device_id);
 }
 

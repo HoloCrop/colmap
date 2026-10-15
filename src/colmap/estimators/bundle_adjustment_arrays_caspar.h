@@ -37,6 +37,12 @@ NormalizedProblem NormalizeProblem(
     size_t num_points,
     const std::vector<Rigid3d>& sensors_from_rig);
 
+// Packs each sensor's sensor_from_rig storage followed by its PINHOLE
+// [fx, fy, cx, cy] calibration (4 floats per sensor) for the row factor.
+std::vector<StorageType> PackSensorCalibrations(
+    const std::vector<Rigid3d>& sensors_from_rig,
+    const float* sensor_calibrations);
+
 std::vector<StorageType> PackPoses(const std::vector<Rigid3d>& poses);
 std::vector<Rigid3d> UnpackPoses(const std::vector<StorageType>& packed);
 

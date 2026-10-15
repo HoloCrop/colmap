@@ -218,6 +218,10 @@
 #include "kernel_pinhole_split_fixed_principal_point_res_jac.h"
 #include "kernel_pinhole_split_fixed_principal_point_res_jac_first.h"
 #include "kernel_pinhole_split_fixed_principal_point_score.h"
+#include "kernel_rig_surface_jtjnjtr_direct.h"
+#include "kernel_rig_surface_res_jac.h"
+#include "kernel_rig_surface_res_jac_first.h"
+#include "kernel_rig_surface_score.h"
 #include "kernel_row_fixed_rig_pinhole_jtjnjtr_direct.h"
 #include "kernel_row_fixed_rig_pinhole_res_jac.h"
 #include "kernel_row_fixed_rig_pinhole_res_jac_first.h"
@@ -370,6 +374,7 @@ GraphSolver::GraphSolver(
     size_t pinhole_split_fixed_pose_fixed_focal_fixed_point_num_max,
     size_t pinhole_split_fixed_pose_fixed_principal_point_fixed_point_num_max,
     size_t pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max,
+    size_t rig_surface_num_max,
     int device_id)
     : params_(params),
       device_id_(device_id),
@@ -517,7 +522,9 @@ GraphSolver::GraphSolver(
       pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_(
           pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max),
       pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max_(
-          pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max) {
+          pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max),
+      rig_surface_num_(rig_surface_num_max),
+      rig_surface_num_max_(rig_surface_num_max) {
   indices_valid_ = false;
   if (params.pcg_rel_error_exit <= 0.0f) {
     throw std::runtime_error("params.pcg_rel_error_exit must be positive");
@@ -1567,6 +1574,17 @@ GraphSolver::GraphSolver(
           offset,
           4 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
           4);
+  facs__rig_surface__args__pose__idx_shared_ =
+      assign_and_increment<SharedIndex>(
+          origin_ptr_, offset, 1 * rig_surface_num_, 4);
+  facs__rig_surface__args__rig_point__data_ =
+      assign_and_increment<float>(origin_ptr_, offset, 4 * rig_surface_num_, 4);
+  facs__rig_surface__args__position__data_ =
+      assign_and_increment<float>(origin_ptr_, offset, 4 * rig_surface_num_, 4);
+  facs__rig_surface__args__sqrt_weight__data_ =
+      assign_and_increment<float>(origin_ptr_, offset, 1 * rig_surface_num_, 4);
+  facs__rig_surface__args__robust__data_ =
+      assign_and_increment<float>(origin_ptr_, offset, 2 * 1, 4);
   marker__scratch_inout_ =
       assign_and_increment<float>(origin_ptr_, offset, 0 * 0, 4);
   facs__simple_radial__res_ = assign_and_increment<float>(
@@ -1723,6 +1741,8 @@ GraphSolver::GraphSolver(
           offset,
           2 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
           4);
+  facs__rig_surface__res_ =
+      assign_and_increment<float>(origin_ptr_, offset, 4 * rig_surface_num_, 4);
   facs__simple_radial__args__pose__jac_ = assign_and_increment<float>(
       origin_ptr_, offset, 12 * simple_radial_num_, 4);
   facs__simple_radial__args__calib__jac_ = assign_and_increment<float>(
@@ -2016,6 +2036,8 @@ GraphSolver::GraphSolver(
           offset,
           12 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
           4);
+  facs__rig_surface__args__pose__jac_ = assign_and_increment<float>(
+      origin_ptr_, offset, 18 * rig_surface_num_, 4);
   nodes__PinholeCalib__z_ = assign_and_increment<float>(
       origin_ptr_, offset, 4 * PinholeCalib_num_, 4);
   nodes__PinholeCalib__z_end__ =
@@ -2423,6 +2445,8 @@ GraphSolver::GraphSolver(
           offset,
           2 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
           4);
+  facs__rig_surface__jp_ =
+      assign_and_increment<float>(origin_ptr_, offset, 4 * rig_surface_num_, 4);
   marker__jp_end_ = assign_and_increment<float>(origin_ptr_, offset, 0 * 0, 1);
   solver__current_diag_ =
       assign_and_increment<float>(origin_ptr_, offset, 1 * 1, 1);
@@ -3860,6 +3884,28 @@ float GraphSolver::DoResJacFirst() {
       nodes__PinholePose__precond_tril_,
       PinholePose_num_,
       pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_);
+
+  RigSurfaceResJacFirst(nodes__PinholePose__storage_current_,
+                        PinholePose_num_max_,
+                        facs__rig_surface__args__pose__idx_shared_,
+                        facs__rig_surface__args__rig_point__data_,
+                        rig_surface_num_max_,
+                        facs__rig_surface__args__position__data_,
+                        rig_surface_num_max_,
+                        facs__rig_surface__args__sqrt_weight__data_,
+                        rig_surface_num_max_,
+                        facs__rig_surface__args__robust__data_,
+
+                        facs__rig_surface__res_,
+                        rig_surface_num_,
+                        solver__res_tot_,
+                        nodes__PinholePose__r_k_,
+                        PinholePose_num_,
+                        nodes__PinholePose__precond_diag_,
+                        PinholePose_num_,
+                        nodes__PinholePose__precond_tril_,
+                        PinholePose_num_,
+                        rig_surface_num_);
   Copy(marker__r_k_start_, marker__r_k_end_, marker__r_0_start_);
   Copy(marker__r_k_start_, marker__r_k_end_, marker__Mp_start_);
   return 0.5 * ReadCuMem(solver__res_tot_);
@@ -5070,6 +5116,28 @@ void GraphSolver::DoResJac() {
       nodes__PinholePose__precond_tril_,
       PinholePose_num_,
       pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_);
+
+  RigSurfaceResJac(nodes__PinholePose__storage_current_,
+                   PinholePose_num_max_,
+                   facs__rig_surface__args__pose__idx_shared_,
+                   facs__rig_surface__args__rig_point__data_,
+                   rig_surface_num_max_,
+                   facs__rig_surface__args__position__data_,
+                   rig_surface_num_max_,
+                   facs__rig_surface__args__sqrt_weight__data_,
+                   rig_surface_num_max_,
+                   facs__rig_surface__args__robust__data_,
+
+                   facs__rig_surface__res_,
+                   rig_surface_num_,
+
+                   nodes__PinholePose__r_k_,
+                   PinholePose_num_,
+                   nodes__PinholePose__precond_diag_,
+                   PinholePose_num_,
+                   nodes__PinholePose__precond_tril_,
+                   PinholePose_num_,
+                   rig_surface_num_);
   Copy(marker__r_k_start_, marker__r_k_end_, marker__r_0_start_);
   Copy(marker__r_k_start_, marker__r_k_end_, marker__Mp_start_);
 }
@@ -6891,6 +6959,18 @@ float GraphSolver::DoRetractScore() {
       pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_max_,
       solver__res_tot_,
       pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_);
+  RigSurfaceScore(nodes__PinholePose__storage_check_,
+                  PinholePose_num_max_,
+                  facs__rig_surface__args__pose__idx_shared_,
+                  facs__rig_surface__args__rig_point__data_,
+                  rig_surface_num_max_,
+                  facs__rig_surface__args__position__data_,
+                  rig_surface_num_max_,
+                  facs__rig_surface__args__sqrt_weight__data_,
+                  rig_surface_num_max_,
+                  facs__rig_surface__args__robust__data_,
+                  solver__res_tot_,
+                  rig_surface_num_);
   return 0.5 * ReadCuMem(solver__res_tot_);
 }
 
@@ -15894,6 +15974,175 @@ void GraphSolver::
       offset,
       num);
 }
+void GraphSolver::SetRigSurfaceNum(const size_t num) {
+  if (num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(num) + " > rig_surface_num_max_");
+  }
+  rig_surface_num_ = num;
+}
+void GraphSolver::SetRigSurfacePoseIndicesFromHost(
+    const unsigned int* const indices, size_t num) {
+  cudaSetDevice(device_id_);
+  if (num != rig_surface_num_) {
+    throw std::runtime_error(
+        std::to_string(num) +
+        " != rig_surface_num_. Use Setrig_surfaceNum before setting indices.");
+  }
+  cudaMemcpy((unsigned int*)marker__scratch_inout_,
+             indices,
+             num * sizeof(unsigned int),
+             cudaMemcpyHostToDevice);
+  SetRigSurfacePoseIndicesFromDevice((unsigned int*)marker__scratch_inout_,
+                                     num);
+}
+
+void GraphSolver::SetRigSurfacePoseIndicesFromDevice(
+    const unsigned int* const indices, size_t num) {
+  indices_valid_ = false;
+  cudaSetDevice(device_id_);
+
+  if (num != rig_surface_num_) {
+    throw std::runtime_error(
+        std::to_string(num) +
+        " != rig_surface_num_. Use Setrig_surfaceNum before setting indices.");
+  }
+
+  size_t tmp_size = SortIndicesGetTmpNbytes(num);
+  if (tmp_size + num > scratch_inout_size_) {
+    throw std::runtime_error(
+        "Scratch_inout_size too small. tmp_size: " + std::to_string(tmp_size) +
+        ", num: " + std::to_string(num) +
+        ", scratch_inout_size_: " + std::to_string(scratch_inout_size_));
+  }
+  SharedIndices(indices, facs__rig_surface__args__pose__idx_shared_, num);
+}
+void GraphSolver::SetRigSurfaceRigPointDataFromStackedHost(
+    const float* const data, size_t offset, size_t num) {
+  cudaSetDevice(device_id_);
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  cudaMemcpy(marker__scratch_inout_,
+             data,
+             3 * num * sizeof(float),
+             cudaMemcpyHostToDevice);
+  ConstRigPointStackedToCaspar(marker__scratch_inout_,
+                               facs__rig_surface__args__rig_point__data_,
+                               rig_surface_num_max_,
+                               offset,
+                               num);
+}
+
+void GraphSolver::SetRigSurfaceRigPointDataFromStackedDevice(
+    const float* const data, size_t offset, size_t num) {
+  cudaSetDevice(device_id_);
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  ConstRigPointStackedToCaspar(data,
+                               facs__rig_surface__args__rig_point__data_,
+                               rig_surface_num_max_,
+                               offset,
+                               num);
+}
+void GraphSolver::SetRigSurfacePositionDataFromStackedHost(
+    const float* const data, size_t offset, size_t num) {
+  cudaSetDevice(device_id_);
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  cudaMemcpy(marker__scratch_inout_,
+             data,
+             3 * num * sizeof(float),
+             cudaMemcpyHostToDevice);
+  ConstSurfacePositionStackedToCaspar(marker__scratch_inout_,
+                                      facs__rig_surface__args__position__data_,
+                                      rig_surface_num_max_,
+                                      offset,
+                                      num);
+}
+
+void GraphSolver::SetRigSurfacePositionDataFromStackedDevice(
+    const float* const data, size_t offset, size_t num) {
+  cudaSetDevice(device_id_);
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  ConstSurfacePositionStackedToCaspar(data,
+                                      facs__rig_surface__args__position__data_,
+                                      rig_surface_num_max_,
+                                      offset,
+                                      num);
+}
+void GraphSolver::SetRigSurfaceSqrtWeightDataFromStackedHost(
+    const float* const data, size_t offset, size_t num) {
+  cudaSetDevice(device_id_);
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  cudaMemcpy(marker__scratch_inout_,
+             data,
+             1 * num * sizeof(float),
+             cudaMemcpyHostToDevice);
+  ConstSurfaceSqrtWeightStackedToCaspar(
+      marker__scratch_inout_,
+      facs__rig_surface__args__sqrt_weight__data_,
+      rig_surface_num_max_,
+      offset,
+      num);
+}
+
+void GraphSolver::SetRigSurfaceSqrtWeightDataFromStackedDevice(
+    const float* const data, size_t offset, size_t num) {
+  cudaSetDevice(device_id_);
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  ConstSurfaceSqrtWeightStackedToCaspar(
+      data,
+      facs__rig_surface__args__sqrt_weight__data_,
+      rig_surface_num_max_,
+      offset,
+      num);
+}
+void GraphSolver::SetRigSurfaceRobustDataFromStackedHost(
+    const float* const data) {
+  cudaSetDevice(device_id_);
+  const size_t offset = 0;
+  const size_t num = 1;
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  cudaMemcpy(marker__scratch_inout_,
+             data,
+             2 * num * sizeof(float),
+             cudaMemcpyHostToDevice);
+  ConstSurfaceRobustStackedToCaspar(marker__scratch_inout_,
+                                    facs__rig_surface__args__robust__data_,
+                                    1,
+                                    offset,
+                                    num);
+}
+
+void GraphSolver::SetRigSurfaceRobustDataFromStackedDevice(
+    const float* const data) {
+  cudaSetDevice(device_id_);
+  const size_t offset = 0;
+  const size_t num = 1;
+  if (offset + num > rig_surface_num_max_) {
+    throw std::runtime_error(std::to_string(offset + num) +
+                             " > rig_surface_num_max_");
+  }
+  ConstSurfaceRobustStackedToCaspar(
+      data, facs__rig_surface__args__robust__data_, 1, offset, num);
+}
 
 size_t GraphSolver::get_nbytes() {
   size_t offset = 0;
@@ -16386,6 +16635,11 @@ size_t GraphSolver::get_nbytes() {
       offset,
       4 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
       4);
+  increment_offset<SharedIndex>(offset, 1 * rig_surface_num_, 4);
+  increment_offset<float>(offset, 4 * rig_surface_num_, 4);
+  increment_offset<float>(offset, 4 * rig_surface_num_, 4);
+  increment_offset<float>(offset, 1 * rig_surface_num_, 4);
+  increment_offset<float>(offset, 2 * 1, 4);
   at_least = std::max(
       at_least,
       offset + std::max({4 * PinholeCalib_num_max_,
@@ -16480,6 +16734,7 @@ size_t GraphSolver::get_nbytes() {
       offset,
       2 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
       4);
+  increment_offset<float>(offset, 4 * rig_surface_num_, 4);
   increment_offset<float>(offset, 12 * simple_radial_num_, 4);
   increment_offset<float>(offset, 4 * simple_radial_num_, 4);
   increment_offset<float>(offset, 6 * simple_radial_num_, 4);
@@ -16612,6 +16867,7 @@ size_t GraphSolver::get_nbytes() {
       offset,
       12 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
       4);
+  increment_offset<float>(offset, 18 * rig_surface_num_, 4);
   increment_offset<float>(offset, 4 * PinholeCalib_num_, 4);
   increment_offset<float>(offset, 0 * 0, 4);
   increment_offset<float>(offset, 2 * PinholeFocal_num_, 4);
@@ -16821,6 +17077,7 @@ size_t GraphSolver::get_nbytes() {
       offset,
       2 * pinhole_split_fixed_focal_fixed_principal_point_fixed_point_num_,
       4);
+  increment_offset<float>(offset, 4 * rig_surface_num_, 4);
   increment_offset<float>(offset, 0 * 0, 1);
   increment_offset<float>(offset, 1 * 1, 1);
   increment_offset<float>(offset, 1 * 1, 1);

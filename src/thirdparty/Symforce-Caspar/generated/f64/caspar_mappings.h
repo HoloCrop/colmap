@@ -202,6 +202,18 @@ cudaError_t ConstReprojectionLossScaleCasparToStacked(
     const unsigned int cas_offset,
     const unsigned int num_objects);
 
+cudaError_t ConstRigPointStackedToCaspar(const double* stacked_data,
+                                         double* cas_data,
+                                         const unsigned int cas_stride,
+                                         const unsigned int cas_offset,
+                                         const unsigned int num_objects);
+
+cudaError_t ConstRigPointCasparToStacked(const double* cas_data,
+                                         double* stacked_data,
+                                         const unsigned int cas_stride,
+                                         const unsigned int cas_offset,
+                                         const unsigned int num_objects);
+
 cudaError_t ConstSimpleRadialFocalAndExtraStackedToCaspar(
     const double* stacked_data,
     double* cas_data,
@@ -252,6 +264,44 @@ cudaError_t ConstSimpleRadialSensorFromRigStackedToCaspar(
     const unsigned int num_objects);
 
 cudaError_t ConstSimpleRadialSensorFromRigCasparToStacked(
+    const double* cas_data,
+    double* stacked_data,
+    const unsigned int cas_stride,
+    const unsigned int cas_offset,
+    const unsigned int num_objects);
+
+cudaError_t ConstSurfacePositionStackedToCaspar(const double* stacked_data,
+                                                double* cas_data,
+                                                const unsigned int cas_stride,
+                                                const unsigned int cas_offset,
+                                                const unsigned int num_objects);
+
+cudaError_t ConstSurfacePositionCasparToStacked(const double* cas_data,
+                                                double* stacked_data,
+                                                const unsigned int cas_stride,
+                                                const unsigned int cas_offset,
+                                                const unsigned int num_objects);
+
+cudaError_t ConstSurfaceRobustStackedToCaspar(const double* stacked_data,
+                                              double* cas_data,
+                                              const unsigned int cas_stride,
+                                              const unsigned int cas_offset,
+                                              const unsigned int num_objects);
+
+cudaError_t ConstSurfaceRobustCasparToStacked(const double* cas_data,
+                                              double* stacked_data,
+                                              const unsigned int cas_stride,
+                                              const unsigned int cas_offset,
+                                              const unsigned int num_objects);
+
+cudaError_t ConstSurfaceSqrtWeightStackedToCaspar(
+    const double* stacked_data,
+    double* cas_data,
+    const unsigned int cas_stride,
+    const unsigned int cas_offset,
+    const unsigned int num_objects);
+
+cudaError_t ConstSurfaceSqrtWeightCasparToStacked(
     const double* cas_data,
     double* stacked_data,
     const unsigned int cas_stride,

@@ -62,6 +62,16 @@ struct CasparRowSectionDensities {
   std::vector<size_t> observation_counts;
 };
 
+// Every whole-row selection at once: SelectCasparRowPoints at density d keeps
+// exactly the points whose first_density <= d. point_counts[d] and
+// observation_counts[d] (summing the given per-point observation counts) are
+// that selection's sizes for d = 0..max density.
+struct CasparRowPointDensities {
+  std::vector<uint32_t> first_density;
+  std::vector<uint64_t> point_counts;
+  std::vector<uint64_t> observation_counts;
+};
+
 std::vector<uint32_t> RowSourceTrackOffsets(
     const std::vector<CasparRowTrackSource>& sources);
 
@@ -86,6 +96,17 @@ CasparRowSectionDensities AssignCasparRowSectionDensities(
     const bool* active_frame_masks,
     size_t num_sections,
     size_t num_frames,
+    size_t num_row_points,
+    size_t minimum_track_length);
+
+CasparRowPointDensities AssignCasparRowPointDensities(
+    const std::vector<CasparRowTrackSource>& sources,
+    const uint32_t* image_frame_indices,
+    const uint32_t* image_sensor_indices,
+    const float* sensor_dimensions,
+    const bool* active_frame_mask,
+    size_t num_frames,
+    const uint32_t* point_observation_counts,
     size_t num_row_points,
     size_t minimum_track_length);
 

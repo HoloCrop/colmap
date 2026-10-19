@@ -1,6 +1,8 @@
 #include "colmap/estimators/row_track_caspar.h"
 
+#include <algorithm>
 #include <limits>
+#include <numeric>
 
 #include <Eigen/Core>
 
@@ -279,6 +281,57 @@ CasparRowSectionDensities AssignCasparRowSectionDensities(
     }
   }
   return assignment;
+}
+
+CasparRowPointDensities AssignCasparRowPointDensities(
+    const std::vector<CasparRowTrackSource>& sources,
+    const uint32_t* image_frame_indices,
+    const uint32_t* image_sensor_indices,
+    const float* sensor_dimensions,
+    const bool* active_frame_mask,
+    const size_t num_frames,
+    const uint32_t* point_observation_counts,
+    const size_t num_row_points,
+    const size_t minimum_track_length) {
+  // A track is admitted at density d exactly when one of its strata holds
+  // fewer than d earlier tracks, so the uncapped first density of the whole
+  // row as a single section decides every density in one scan.
+  CasparRowSectionDensities assignment =
+      AssignCasparRowSectionDensities(sources,
+                                      image_frame_indices,
+                                      image_sensor_indices,
+                                      sensor_dimensions,
+                                      active_frame_mask,
+                                      /*num_sections=*/1,
+                                      num_frames,
+                                      num_row_points,
+                                      minimum_track_length);
+  const uint32_t unselected = std::numeric_limits<uint32_t>::max();
+  uint32_t maximum_density = 0;
+  for (const uint32_t density : assignment.first_density) {
+    if (density != unselected) {
+      maximum_density = std::max(maximum_density, density);
+    }
+  }
+  CasparRowPointDensities densities{
+      std::move(assignment.first_density),
+      std::vector<uint64_t>(maximum_density + 1),
+      std::vector<uint64_t>(maximum_density + 1)};
+  for (size_t row_point = 0; row_point < num_row_points; ++row_point) {
+    const uint32_t density = densities.first_density[row_point];
+    if (density != unselected) {
+      ++densities.point_counts[density];
+      densities.observation_counts[density] +=
+          point_observation_counts[row_point];
+    }
+  }
+  std::partial_sum(densities.point_counts.begin(),
+                   densities.point_counts.end(),
+                   densities.point_counts.begin());
+  std::partial_sum(densities.observation_counts.begin(),
+                   densities.observation_counts.end(),
+                   densities.observation_counts.begin());
+  return densities;
 }
 
 CasparRowTrackSelection SelectCasparRowPoints(

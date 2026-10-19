@@ -467,8 +467,7 @@ def test_fixed_rig_array_ba_solves_live_sensor_translation_scale(refine_scale):
         assert reprojection_rmse(1.0) > 0.1
 
 
-@caspar_only
-def test_row_section_selection_samples_all_sources_and_prefers_long_tracks():
+def row_selection_sources():
     first = pycolmap.CasparRowTrackSource(
         np.zeros((6, 3), dtype=np.float32),
         np.arange(6, dtype=np.int64),
@@ -500,7 +499,12 @@ def test_row_section_selection_samples_all_sources_and_prefers_long_tracks():
         np.empty(0, dtype=np.uint32),
         np.array((1,), dtype=np.uint32),
     )
-    sources = (first, second)
+    return (first, second)
+
+
+@caspar_only
+def test_row_section_selection_samples_all_sources_and_prefers_long_tracks():
+    sources = row_selection_sources()
     point_track_offsets = np.array((0, 2, 4, 5, 6, 7), dtype=np.uint32)
     point_track_indices = np.array((0, 6, 1, 2, 3, 4, 5), dtype=np.uint32)
     source_support = np.array((2, 1, 1, 1, 1), dtype=np.uint16)
@@ -599,6 +603,54 @@ def test_row_section_selection_samples_all_sources_and_prefers_long_tracks():
     assert whole_row.quota_truncated
     np.testing.assert_array_equal(sibling_only.point_indices, (0, 1))
     assert not sibling_only.quota_truncated
+
+
+@caspar_only
+def test_row_point_densities_reproduce_every_selection():
+    sources = row_selection_sources()
+    source_support = np.array((2, 1, 1, 1, 1), dtype=np.uint16)
+    observation_counts = np.array((2, 2, 1, 2, 1), dtype=np.uint32)
+    image_frame_indices = np.arange(3, dtype=np.uint32)
+    image_sensor_indices = np.zeros(3, dtype=np.uint32)
+    sensor_dimensions = np.array(((100, 100),), dtype=np.float32)
+
+    for active_frames in (
+        np.array((False, True, True)),
+        np.ones(3, dtype=np.bool_),
+        np.array((False, True, False)),
+    ):
+        densities = pycolmap.caspar_row_point_densities(
+            sources,
+            source_support,
+            observation_counts,
+            image_frame_indices,
+            image_sensor_indices,
+            sensor_dimensions,
+            active_frames,
+            1,
+        )
+        maximum_density = len(densities.point_counts) - 1
+        for density in range(maximum_density + 2):
+            selected = pycolmap.caspar_select_row_points(
+                sources,
+                source_support,
+                image_frame_indices,
+                image_sensor_indices,
+                sensor_dimensions,
+                active_frames,
+                1,
+                density,
+            )
+            points = np.flatnonzero(densities.first_density <= density)
+            counted = min(density, maximum_density)
+            np.testing.assert_array_equal(selected.point_indices, points)
+            assert selected.quota_truncated == (
+                densities.point_counts[counted] < densities.point_counts[-1]
+            )
+            assert densities.point_counts[counted] == len(points)
+            assert densities.observation_counts[counted] == (
+                observation_counts[points].sum()
+            )
 
 
 @caspar_only

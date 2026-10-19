@@ -109,6 +109,12 @@ struct PyCasparRowPointSelection {
   bool quota_truncated;
 };
 
+struct PyCasparRowPointDensities {
+  py::array_t<uint32_t> first_density;
+  py::array_t<uint64_t> point_counts;
+  py::array_t<uint64_t> observation_counts;
+};
+
 struct PyCasparRowBundleResult {
   std::vector<Rigid3d> rigs_from_world;
   py::array_t<uint32_t> row_point_indices;
@@ -135,12 +141,17 @@ py::array_t<float> MatrixArray(std::vector<float>&& values,
       owner);
 }
 
-py::array_t<uint32_t> IndexArray(std::vector<uint32_t>&& values) {
-  auto* storage = new std::vector<uint32_t>(std::move(values));
+template <typename T>
+py::array_t<T> VectorArray(std::vector<T>&& values) {
+  auto* storage = new std::vector<T>(std::move(values));
   py::capsule owner(storage, [](void* pointer) {
-    delete static_cast<std::vector<uint32_t>*>(pointer);
+    delete static_cast<std::vector<T>*>(pointer);
   });
-  return py::array_t<uint32_t>(storage->size(), storage->data(), owner);
+  return py::array_t<T>(storage->size(), storage->data(), owner);
+}
+
+py::array_t<uint32_t> IndexArray(std::vector<uint32_t>&& values) {
+  return VectorArray(std::move(values));
 }
 
 std::vector<CasparRowTrackSource> NativeRowTrackSources(
@@ -347,6 +358,46 @@ PyCasparRowPointSelection SelectRowPoints(
   return {
       IndexArray(std::move(selection.point_indices)),
       selection.quota_truncated,
+  };
+}
+
+PyCasparRowPointDensities RowPointDensities(
+    const std::vector<const PyCasparRowTrackSource*>& sources,
+    const Uint16Array& source_support,
+    const Uint32Array& point_observation_counts,
+    const Uint32Array& image_frame_indices,
+    const Uint32Array& image_sensor_indices,
+    const FloatArray& sensor_dimensions,
+    const BoolArray& active_frame_mask,
+    const size_t minimum_track_length) {
+  THROW_CHECK_GT(sources.size(), 0);
+  const std::vector<CasparRowTrackSource> native_sources =
+      NativeRowTrackSources(sources);
+  CheckRowSelectionArrays(source_support,
+                          image_frame_indices,
+                          image_sensor_indices,
+                          sensor_dimensions,
+                          active_frame_mask);
+  THROW_CHECK_EQ(point_observation_counts.ndim(), 1);
+  THROW_CHECK_EQ(point_observation_counts.shape(0), source_support.shape(0));
+
+  CasparRowPointDensities densities;
+  {
+    py::gil_scoped_release release;
+    densities = AssignCasparRowPointDensities(native_sources,
+                                              image_frame_indices.data(),
+                                              image_sensor_indices.data(),
+                                              sensor_dimensions.data(),
+                                              active_frame_mask.data(),
+                                              active_frame_mask.shape(0),
+                                              point_observation_counts.data(),
+                                              source_support.shape(0),
+                                              minimum_track_length);
+  }
+  return {
+      VectorArray(std::move(densities.first_density)),
+      VectorArray(std::move(densities.point_counts)),
+      VectorArray(std::move(densities.observation_counts)),
   };
 }
 
@@ -735,6 +786,12 @@ void BindRowPointRefinement(py::module& m) {
       .def_readonly("quota_truncated",
                     &PyCasparRowPointSelection::quota_truncated);
 
+  py::classh<PyCasparRowPointDensities>(m, "CasparRowPointDensities")
+      .def_readonly("first_density", &PyCasparRowPointDensities::first_density)
+      .def_readonly("point_counts", &PyCasparRowPointDensities::point_counts)
+      .def_readonly("observation_counts",
+                    &PyCasparRowPointDensities::observation_counts);
+
   py::classh<PyCasparRowSectionResult>(m, "CasparRowSectionResult")
       .def_readonly("rigs_from_world",
                     &PyCasparRowSectionResult::rigs_from_world)
@@ -816,6 +873,18 @@ void BindRowPointRefinement(py::module& m) {
         "tracks_per_spatial_cell"_a,
         "Select active cross-source row points and spatially bounded "
         "single-source tracks directly from canonical row tracks.");
+  m.def("caspar_row_point_densities",
+        RowPointDensities,
+        "sources"_a,
+        "source_support"_a.noconvert(),
+        "point_observation_counts"_a.noconvert(),
+        "image_frame_indices"_a.noconvert(),
+        "image_sensor_indices"_a.noconvert(),
+        "sensor_dimensions"_a.noconvert(),
+        "active_frame_mask"_a.noconvert(),
+        "minimum_track_length"_a,
+        "Each row point's first selecting spatial density, with cumulative "
+        "point and observation counts per density, in one track scan.");
   m.def("caspar_refine_row_section",
         RefineRowSection,
         "sources"_a,
